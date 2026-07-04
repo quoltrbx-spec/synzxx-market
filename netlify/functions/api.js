@@ -14,30 +14,47 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ========================================
-// JSON ХРАНИЛИЩЕ
+// 🔧 ФИКС: ПРАВИЛЬНЫЙ ПУТЬ ДЛЯ NETLIFY
 // ========================================
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+// На Netlify можно писать только в /tmp
+const DATA_DIR = '/tmp/data';
 
+// СОЗДАЁМ ПАПКУ С ПРОВЕРКОЙ
+try {
+    if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        console.log('✅ Папка создана:', DATA_DIR);
+    }
+} catch (err) {
+    console.error('❌ Ошибка создания папки:', err);
+}
+
+// ========================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
+// ========================================
 function loadData(filename) {
     const filePath = path.join(DATA_DIR, filename);
-    if (fs.existsSync(filePath)) {
-        try {
+    try {
+        if (fs.existsSync(filePath)) {
             return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        } catch (e) {
-            return null;
         }
+    } catch (e) {
+        console.error('Ошибка загрузки:', filename, e);
     }
     return null;
 }
 
 function saveData(filename, data) {
     const filePath = path.join(DATA_DIR, filename);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Ошибка сохранения:', filename, e);
+    }
 }
 
 // ========================================
-// ЗАГРУЗКА ДАННЫХ
+// ЗАГРУЗКА ДАННЫХ (С ПЕРВОНАЧАЛЬНЫМИ ЗНАЧЕНИЯМИ)
 // ========================================
 let users = loadData('users.json') || [];
 let ads = loadData('ads.json') || [];
@@ -69,7 +86,9 @@ function saveAllData() {
     });
 }
 
-// ===== ТЕСТОВЫЕ ПОЛЬЗОВАТЕЛИ =====
+// ========================================
+// ТЕСТОВЫЕ ПОЛЬЗОВАТЕЛИ
+// ========================================
 async function createTestUsers() {
     if (users.length === 0) {
         const testUsers = [
@@ -91,6 +110,7 @@ async function createTestUsers() {
             });
         }
         saveAllData();
+        console.log('✅ Тестовые пользователи созданы');
     }
 }
 
@@ -165,6 +185,7 @@ app.post('/api/register', async (req, res) => {
             user: { ...newUser, password: undefined }
         });
     } catch (error) {
+        console.error('Ошибка регистрации:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -192,6 +213,7 @@ app.post('/api/login', async (req, res) => {
             user: { ...user, password: undefined }
         });
     } catch (error) {
+        console.error('Ошибка входа:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -209,6 +231,16 @@ app.get('/api/me', authenticateToken, (req, res) => {
 app.get('/api/ads', (req, res) => {
     const approved = ads.filter(a => a.status === 'approved');
     res.json(approved);
+});
+
+app.get('/api/ads/:id', (req, res) => {
+    const id = parseInt(req.params.id);
+    const ad = ads.find(a => a.id === id);
+    if (!ad) return res.status(404).json({ error: 'Не найдено' });
+    if (ad.status !== 'approved') return res.status(403).json({ error: 'Объявление на модерации' });
+    ad.views = (ad.views || 0) + 1;
+    saveAllData();
+    res.json(ad);
 });
 
 app.post('/api/ads', authenticateToken, (req, res) => {
@@ -282,8 +314,17 @@ app.post('/api/ads', authenticateToken, (req, res) => {
             ad: newAd 
         });
     } catch (error) {
+        console.error('Ошибка создания объявления:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
+});
+
+// ========================================
+// API - МОДЕРАЦИЯ
+// ========================================
+
+app.get('/api/pending-ads', authenticateToken, isAdmin, (req, res) => {
+    res.json(pendingAds);
 });
 
 app.post('/api/approve-ad/:id', authenticateToken, isAdmin, (req, res) => {
@@ -379,6 +420,19 @@ app.post('/api/orders/:orderId/buyer-sent', authenticateToken, (req, res) => {
     res.json({ success: true, order });
 });
 
+app.post('/api/orders/:orderId/cancel', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (order.buyer_id !== req.user.id) return res.status(403).json({ error: 'Только покупатель может отменить' });
+    if (order.status !== 'pending') return res.status(400).json({ error: 'Нельзя отменить обработанный заказ' });
+    order.status = 'cancelled';
+    const ad = ads.find(a => a.id === order.ad_id);
+    if (ad) ad.status = 'approved';
+    saveAllData();
+    res.json({ success: true, order });
+});
+
 app.get('/api/orders', authenticateToken, (req, res) => {
     const userOrders = orders.filter(o => o.buyer_id === req.user.id || o.seller_id === req.user.id);
     res.json(userOrders);
@@ -421,11 +475,10 @@ app.post('/api/reviews', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'Вы уже оставили отзыв' });
         }
 
-        const ad = ads.find(a => a.id === ad_id);
         const newReview = {
             id: nextReviewId++,
             ad_id,
-            ad_title: ad ? ad.title : 'Товар',
+            ad_title: ads.find(a => a.id === ad_id)?.title || 'Товар',
             buyer_id,
             seller_id,
             rating: parseInt(rating),
@@ -436,6 +489,7 @@ app.post('/api/reviews', authenticateToken, (req, res) => {
         saveAllData();
         res.status(201).json({ success: true, review: newReview });
     } catch (error) {
+        console.error('Ошибка создания отзыва:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -542,6 +596,78 @@ app.post('/api/chats/:chatId/messages', authenticateToken, (req, res) => {
     chat.messages.push(message);
     saveAllData();
     res.json(message);
+});
+
+// ========================================
+// API - СООБЩЕНИЯ
+// ========================================
+
+app.get('/api/messages', authenticateToken, (req, res) => {
+    const userMessages = messages.filter(m => m.user_id === req.user.id);
+    res.json(userMessages);
+});
+
+app.post('/api/messages', authenticateToken, (req, res) => {
+    const { content, to_user_id, title, type } = req.body;
+    if (!content) return res.status(400).json({ error: 'Введите сообщение' });
+    
+    const user = users.find(u => u.id === req.user.id);
+    const message = {
+        id: nextMessageId++,
+        user_id: to_user_id || req.user.id,
+        from_admin: user?.is_admin || false,
+        title: title || null,
+        content,
+        created_at: new Date().toISOString(),
+        type: type || 'system',
+        read: false
+    };
+    messages.push(message);
+    saveAllData();
+    res.json({ success: true, message });
+});
+
+// ========================================
+// API - АДМИН
+// ========================================
+
+app.get('/api/admin/users', authenticateToken, isAdmin, (req, res) => {
+    const usersData = users.map(u => ({
+        id: u.id,
+        username: u.username,
+        name: u.name,
+        balance: u.balance || 0,
+        is_admin: u.is_admin || 0,
+        warnings: u.warnings || 0,
+        avatar: u.avatar || null
+    }));
+    res.json(usersData);
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, isAdmin, (req, res) => {
+    const id = parseInt(req.params.id);
+    const index = users.findIndex(u => u.id === id);
+    if (index === -1) return res.status(404).json({ error: 'Пользователь не найден' });
+    users.splice(index, 1);
+    saveAllData();
+    res.json({ success: true });
+});
+
+app.put('/api/admin/users/:id/toggle-admin', authenticateToken, isAdmin, (req, res) => {
+    const id = parseInt(req.params.id);
+    const user = users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    user.is_admin = user.is_admin ? 0 : 1;
+    saveAllData();
+    res.json({ success: true, is_admin: user.is_admin });
+});
+
+app.delete('/api/admin/ads/:id', authenticateToken, isAdmin, (req, res) => {
+    const id = parseInt(req.params.id);
+    ads = ads.filter(a => a.id !== id);
+    pendingAds = pendingAds.filter(a => a.id !== id);
+    saveAllData();
+    res.json({ success: true });
 });
 
 // ========================================
