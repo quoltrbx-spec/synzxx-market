@@ -15,9 +15,61 @@ const supabaseUrl = process.env.SUPABASE_URL || 'https://huwzbjowyrzxkbnkhqtc.su
 const supabaseKey = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1d3piam93eXJ6eGtibmtocXRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE2NzY0NjgsImV4cCI6MjA2NzI1MjQ2OH0.SZPmGtRLxL-U8EqhDdSyiBQK4bORLW6iQzH_ru-ajkI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// ========================================
+// НАСТРОЙКА MULTER ДЛЯ ЗАГРУЗКИ КАРТИНОК
+// ========================================
+const multer = require('multer');
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+        const allowed = /jpeg|jpg|png|gif|webp/;
+        cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
+    }
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ========================================
+// СОЗДАНИЕ ТЕСТОВЫХ ПОЛЬЗОВАТЕЛЕЙ
+// ========================================
+async function createTestUsers() {
+    try {
+        const { count } = await supabase
+            .from('users')
+            .select('id', { count: 'exact' });
+        
+        if (count === 0) {
+            console.log('👤 Создаём тестовых пользователей...');
+            
+            const testUsers = [
+                { username: 'notsynzxx', password: 'toto2023555', name: 'ns', is_admin: 1, prefix: 'Administrator', balance: 1000 },
+                { username: 'risha', password: 'risha2804account', name: 'mln', is_admin: 1, prefix: 'Support', balance: 500 }
+            ];
+            
+            for (const u of testUsers) {
+                const hashedPassword = await bcrypt.hash(u.password, 10);
+                const { error } = await supabase
+                    .from('users')
+                    .insert({
+                        username: u.username,
+                        password: hashedPassword,
+                        name: u.name,
+                        is_admin: u.is_admin,
+                        prefix: u.prefix,
+                        balance: u.balance
+                    });
+                if (error) console.error('❌ Ошибка создания:', u.username, error);
+                else console.log('✅ Создан:', u.username);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Ошибка создания пользователей:', error);
+    }
+}
 
 // ========================================
 // АУТЕНТИФИКАЦИЯ
@@ -151,7 +203,60 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 });
 
 // ========================================
-// API - ОБЪЯВЛЕНИЯ (ИСПРАВЛЕНО)
+// API - ЗАГРУЗКА КАРТИНКИ
+// ========================================
+
+app.post('/api/upload-image', authenticateToken, upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Файл не загружен' });
+        }
+
+        const fileExt = req.file.originalname.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `ads/${fileName}`;
+
+        // Проверяем, существует ли bucket
+        const { data: buckets } = await supabase.storage.listBuckets();
+        const bucketExists = buckets?.some(b => b.name === 'images');
+        
+        if (!bucketExists) {
+            await supabase.storage.createBucket('images', {
+                public: true,
+                allowedMimeTypes: ['image/png', 'image/jpeg', 'image/gif', 'image/webp'],
+                fileSizeLimit: 5242880
+            });
+        }
+
+        const { error } = await supabase.storage
+            .from('images')
+            .upload(filePath, req.file.buffer, {
+                contentType: req.file.mimetype,
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (error) throw error;
+
+        const { data: urlData } = supabase.storage
+            .from('images')
+            .getPublicUrl(filePath);
+
+        const imageUrl = urlData?.publicUrl || null;
+
+        res.json({ 
+            success: true, 
+            imageUrl: imageUrl,
+            message: 'Картинка загружена!' 
+        });
+    } catch (error) {
+        console.error('❌ Ошибка загрузки картинки:', error);
+        res.status(500).json({ error: 'Ошибка загрузки картинки' });
+    }
+});
+
+// ========================================
+// API - ОБЪЯВЛЕНИЯ
 // ========================================
 
 app.get('/api/ads', async (req, res) => {
@@ -188,9 +293,8 @@ app.post('/api/ads', authenticateToken, async (req, res) => {
         console.log('📝 Тело запроса:', req.body);
         console.log('📝 Пользователь:', req.user.id);
         
-        const { title, description, price, city, country, phone, category, priceType, deliveryTime } = req.body;
+        const { title, description, price, city, country, phone, category, priceType, deliveryTime, image } = req.body;
         
-        // ⭐ ПРОВЕРКА ОБЯЗАТЕЛЬНЫХ ПОЛЕЙ
         if (!title || !title.trim()) {
             return res.status(400).json({ error: 'Введите название товара!' });
         }
@@ -203,7 +307,6 @@ app.post('/api/ads', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Выберите категорию!' });
         }
         
-        // Проверка телефона (не для ключей)
         if (category !== 'keys') {
             if (!phone || !phone.trim()) {
                 return res.status(400).json({ error: 'Введите номер телефона!' });
@@ -214,14 +317,12 @@ app.post('/api/ads', authenticateToken, async (req, res) => {
             }
         }
         
-        // Проверка доставки (для ключей)
         if (category === 'keys') {
             if (!deliveryTime || parseInt(deliveryTime) < 1 || parseInt(deliveryTime) > 1440) {
                 return res.status(400).json({ error: 'Введите время доставки!' });
             }
         }
         
-        // Формируем цену
         let displayPrice = Number(price).toLocaleString() + ' ₽';
         if (priceType === 'hour') {
             displayPrice = Number(price).toLocaleString() + ' ₽/час';
@@ -229,7 +330,6 @@ app.post('/api/ads', authenticateToken, async (req, res) => {
             displayPrice = 'Договорная';
         }
         
-        // Получаем пользователя
         const { data: user } = await supabase
             .from('users')
             .select('name')
@@ -240,7 +340,6 @@ app.post('/api/ads', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Пользователь не найден' });
         }
         
-        // ⭐ СОЗДАЁМ ОБЪЯВЛЕНИЕ В БАЗЕ
         const { data: newAd, error } = await supabase
             .from('ads')
             .insert({
@@ -256,7 +355,8 @@ app.post('/api/ads', authenticateToken, async (req, res) => {
                 user_id: req.user.id,
                 user_name: user.name || 'Пользователь',
                 status: 'pending',
-                delivery_time: deliveryTime || null
+                delivery_time: deliveryTime || null,
+                image: image || null
             })
             .select()
             .single();
@@ -807,39 +907,16 @@ app.get('/api/categories', (req, res) => {
 });
 
 // ========================================
-// API - ЗАГРУЗКА АВАТАРА (ОПЦИОНАЛЬНО)
-// ========================================
-
-app.post('/api/upload-avatar', authenticateToken, async (req, res) => {
-    try {
-        const { avatar } = req.body;
-        if (!avatar) {
-            return res.status(400).json({ error: 'Ссылка на аватар не указана' });
-        }
-        
-        await supabase
-            .from('users')
-            .update({ avatar })
-            .eq('id', req.user.id);
-        
-        res.json({ success: true, avatar });
-    } catch (error) {
-        console.error('❌ Ошибка загрузки аватара:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// ========================================
 // HEALTH
 // ========================================
 
 app.get('/api/health', async (req, res) => {
     try {
-        const { data: users, count: usersCount } = await supabase
+        const { count: usersCount } = await supabase
             .from('users')
             .select('id', { count: 'exact' });
         
-        const { data: ads, count: adsCount } = await supabase
+        const { count: adsCount } = await supabase
             .from('ads')
             .select('id', { count: 'exact' });
         
@@ -864,4 +941,6 @@ app.get('/api/health', async (req, res) => {
 // ========================================
 // ЗАПУСК
 // ========================================
+createTestUsers();
+
 module.exports.handler = serverless(app);

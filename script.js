@@ -516,8 +516,6 @@ let usersData = [];
 // ========================================
 
 function updateUI() {
-    console.log('🔄 updateUI() вызван, currentUser:', currentUser);
-    
     const authContainer = document.getElementById('authContainer');
     const userProfile = document.getElementById('userProfile');
     const profileName = document.getElementById('profileName');
@@ -2539,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // === ⭐⭐⭐ ОТПРАВКА ФОРМЫ (ИСПРАВЛЕНО) ⭐⭐⭐ ===
+    // === ⭐⭐⭐ ОТПРАВКА ФОРМЫ С КАРТИНКОЙ ⭐⭐⭐ ===
     const adForm = document.getElementById('adForm');
     if (adForm) {
         adForm.addEventListener('submit', async function(e) {
@@ -2551,7 +2549,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Собираем данные
             const title = document.getElementById('adTitle')?.value.trim();
             const price = document.getElementById('adPrice')?.value.trim();
             const category = document.getElementById('adCategory')?.value;
@@ -2560,9 +2557,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const city = document.getElementById('adCity')?.value.trim();
             const deliveryTime = document.getElementById('deliveryTime')?.value;
             
-            console.log('📝 Данные формы:', { title, price, category, description, phone, city, deliveryTime, priceType });
-            
-            // Проверки
             if (!title) {
                 showNotification('Введите название товара!', 'warning');
                 return;
@@ -2597,7 +2591,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Блокируем кнопку
             const submitBtn = document.getElementById('publishBtn');
             const originalText = submitBtn?.textContent || 'Опубликовать';
             if (submitBtn) {
@@ -2606,7 +2599,32 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             try {
-                // ⭐ ОТПРАВЛЯЕМ JSON (НЕ FORM DATA!)
+                let imageUrl = null;
+                
+                // ⭐ ЗАГРУЖАЕМ КАРТИНКУ
+                const fileInput = document.getElementById('adImage');
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    const formData = new FormData();
+                    formData.append('image', fileInput.files[0]);
+                    
+                    const uploadResponse = await fetch(`${API_URL}/upload-image`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + authToken
+                        },
+                        body: formData
+                    });
+                    
+                    const uploadData = await uploadResponse.json();
+                    if (uploadData.success) {
+                        imageUrl = uploadData.imageUrl;
+                        console.log('✅ Картинка загружена:', imageUrl);
+                    } else {
+                        console.warn('⚠️ Ошибка загрузки картинки:', uploadData.error);
+                    }
+                }
+                
+                // ⭐ СОЗДАЁМ ОБЪЯВЛЕНИЕ
                 const response = await fetch(`${API_URL}/ads`, {
                     method: 'POST',
                     headers: {
@@ -2621,7 +2639,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         phone: phone || '',
                         city: city || '',
                         priceType,
-                        deliveryTime: deliveryTime || null
+                        deliveryTime: deliveryTime || null,
+                        image: imageUrl
                     })
                 });
                 
@@ -2636,14 +2655,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 closeModal('createModal');
                 adForm.reset();
                 
-                // Сброс превью
                 const preview = document.getElementById('imagePreview');
                 if (preview) {
                     preview.innerHTML = `<i class="fas fa-cloud-upload-alt"></i><span>Нажмите или перетащите фото</span>`;
                     preview.classList.remove('has-image');
                 }
                 
-                // Обновляем список объявлений
                 await loadAds();
                 
             } catch (error) {
@@ -2662,7 +2679,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateUI();
     loadAds();
     
-    // Восстановление темы
     const savedTheme = localStorage.getItem('synzxx_theme');
     if (savedTheme === 'light') {
         document.body.classList.add('light-theme');
