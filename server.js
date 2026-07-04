@@ -1,0 +1,1085 @@
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = 'my-secret-key-2024';
+
+// ===== МИДЛВАРЫ =====
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ===== СТАТИЧЕСКИЕ ФАЙЛЫ =====
+app.use(express.static(path.join(__dirname, '..')));
+
+app.get('/style.css', (req, res) => {
+    const cssPath = path.join(__dirname, '..', 'style.css');
+    if (fs.existsSync(cssPath)) {
+        res.setHeader('Content-Type', 'text/css');
+        res.sendFile(cssPath);
+    } else {
+        res.status(404).send('style.css not found');
+    }
+});
+
+app.get('/script.js', (req, res) => {
+    const jsPath = path.join(__dirname, '..', 'script.js');
+    if (fs.existsSync(jsPath)) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.sendFile(jsPath);
+    } else {
+        res.status(404).send('script.js not found');
+    }
+});
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ===== ГЛАВНАЯ =====
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
+
+// ========================================
+// JSON ХРАНИЛИЩЕ
+// ========================================
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+function loadData(filename) {
+    const filePath = path.join(DATA_DIR, filename);
+    if (fs.existsSync(filePath)) {
+        try {
+            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+}
+
+function saveData(filename, data) {
+    const filePath = path.join(DATA_DIR, filename);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// ========================================
+// ЗАГРУЗКА ДАННЫХ
+// ========================================
+let users = loadData('users.json') || [];
+let ads = loadData('ads.json') || [];
+let complaints = loadData('complaints.json') || [];
+let messages = loadData('messages.json') || [];
+let pendingAds = loadData('pendingAds.json') || [];
+let orders = loadData('orders.json') || [];
+let chats = loadData('chats.json') || [];
+let reviews = loadData('reviews.json') || [];
+
+// Счётчики ID
+let nextAdId = loadData('counters.json')?.nextAdId || 1;
+let nextMessageId = loadData('counters.json')?.nextMessageId || 1;
+let nextOrderId = loadData('counters.json')?.nextOrderId || 1;
+let nextChatId = loadData('counters.json')?.nextChatId || 1;
+let nextUserId = loadData('counters.json')?.nextUserId || 1;
+let nextReviewId = loadData('counters.json')?.nextReviewId || 1;
+
+function saveAllData() {
+    saveData('users.json', users);
+    saveData('ads.json', ads);
+    saveData('complaints.json', complaints);
+    saveData('messages.json', messages);
+    saveData('pendingAds.json', pendingAds);
+    saveData('orders.json', orders);
+    saveData('chats.json', chats);
+    saveData('reviews.json', reviews);
+    saveData('counters.json', {
+        nextAdId, nextMessageId, nextOrderId, nextChatId, nextUserId, nextReviewId
+    });
+}
+
+// Автосохранение каждые 5 секунд
+setInterval(saveAllData, 5000);
+
+// ===== ТЕСТОВЫЕ ПОЛЬЗОВАТЕЛИ =====
+async function createTestUsers() {
+    if (users.length === 0) {
+        const testUsers = [
+            { username: 'notsynzxx', password: 'toto2023555', name: 'ns', is_admin: 1, prefix: 'Administrator', balance: 1000 },
+            { username: 'risha', password: 'risha2804account', name: 'mln', is_admin: 1, prefix: 'Support', balance: 500 }
+        ];
+        for (const u of testUsers) {
+            const hashedPassword = await bcrypt.hash(u.password, 10);
+            users.push({
+                id: nextUserId++,
+                username: u.username,
+                password: hashedPassword,
+                name: u.name,
+                is_admin: u.is_admin,
+                prefix: u.prefix,
+                avatar: null,
+                warnings: 0,
+                balance: u.balance || 0
+            });
+        }
+        saveAllData();
+        console.log('✅ Созданы тестовые пользователи');
+    }
+}
+
+// ========================================
+// АУТЕНТИФИКАЦИЯ
+// ========================================
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ error: 'Требуется авторизация' });
+    }
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Недействительный токен' });
+        }
+        req.user = user;
+        const fullUser = users.find(u => u.id === user.id);
+        req.userData = fullUser;
+        next();
+    });
+}
+
+function isAdmin(req, res, next) {
+    const user = users.find(u => u.id === req.user.id);
+    if (!user || !user.is_admin) {
+        return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    req.userData = user;
+    next();
+}
+
+// ========================================
+// ЗАГРУЗКА ФАЙЛОВ
+// ========================================
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
+const upload = multer({ storage });
+
+const avatarStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, 'uploads', 'avatars');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `avatar-${req.user.id}-${Date.now()}${ext}`);
+    }
+});
+const uploadAvatar = multer({
+    storage: avatarStorage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = /jpeg|jpg|png|gif|webp/;
+        cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
+    }
+});
+
+// ========================================
+// API - АВТОРИЗАЦИЯ
+// ========================================
+
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password, password2, name, email } = req.body;
+
+        if (!username || !password || !password2) {
+            return res.status(400).json({ error: 'Заполните все поля!' });
+        }
+        if (password !== password2) {
+            return res.status(400).json({ error: 'Пароли не совпадают!' });
+        }
+        if (password.length < 4) {
+            return res.status(400).json({ error: 'Пароль минимум 4 символа!' });
+        }
+        if (users.find(u => u.username === username)) {
+            return res.status(400).json({ error: 'Пользователь уже существует!' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = {
+            id: nextUserId++,
+            username,
+            password: hashedPassword,
+            name: name || username,
+            email: email || '',
+            is_admin: 0,
+            prefix: null,
+            avatar: null,
+            warnings: 0,
+            balance: 0
+        };
+        users.push(newUser);
+        saveAllData();
+        console.log('✅ Пользователь создан:', newUser.username);
+
+        const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWT_SECRET, { expiresIn: '30d' });
+        res.status(201).json({
+            token,
+            user: { ...newUser, password: undefined }
+        });
+    } catch (error) {
+        console.error('❌ Ошибка регистрации:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Введите логин и пароль!' });
+        }
+
+        const user = users.find(u => u.username === username);
+        if (!user) {
+            return res.status(400).json({ error: 'Неверный логин или пароль!' });
+        }
+
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) {
+            return res.status(400).json({ error: 'Неверный логин или пароль!' });
+        }
+
+        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+        res.json({
+            token,
+            user: { ...user, password: undefined }
+        });
+    } catch (error) {
+        console.error('❌ Ошибка входа:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.get('/api/me', authenticateToken, (req, res) => {
+    const user = users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.json({ ...user, password: undefined });
+});
+
+app.put('/api/me', authenticateToken, (req, res) => {
+    const user = users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (req.body.name) user.name = req.body.name;
+    if (req.body.avatar) user.avatar = req.body.avatar;
+    if (req.body.prefix !== undefined) user.prefix = req.body.prefix;
+    if (req.body.warnings !== undefined) user.warnings = req.body.warnings;
+    if (req.body.balance !== undefined) user.balance = req.body.balance;
+    saveAllData();
+    res.json({ ...user, password: undefined });
+});
+
+// ========================================
+// API - ЗАГРУЗКА АВАТАРА
+// ========================================
+
+app.post('/api/upload-avatar', authenticateToken, uploadAvatar.single('avatar'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Файл не загружен' });
+        }
+        const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+        const user = users.find(u => u.id === req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+        if (user.avatar) {
+            const oldPath = path.join(__dirname, '..', user.avatar);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+        user.avatar = avatarUrl;
+        saveAllData();
+        res.json({ success: true, avatar: avatarUrl });
+    } catch (error) {
+        console.error('❌ Ошибка загрузки аватара:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ========================================
+// API - БАЛАНС
+// ========================================
+
+app.post('/api/admin/add-balance', authenticateToken, isAdmin, (req, res) => {
+    const { username, amount } = req.body;
+    if (!username || !amount) {
+        return res.status(400).json({ error: 'Укажите пользователя и сумму' });
+    }
+    const user = users.find(u => u.username === username);
+    if (!user) {
+        return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    user.balance = (user.balance || 0) + parseInt(amount);
+    saveAllData();
+    res.json({ success: true, user: { username: user.username, balance: user.balance } });
+});
+
+app.post('/api/add-balance', authenticateToken, (req, res) => {
+    const { amount } = req.body;
+    if (!amount || amount <= 0) {
+        return res.status(400).json({ error: 'Укажите сумму' });
+    }
+    const user = users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    user.balance = (user.balance || 0) + parseInt(amount);
+    saveAllData();
+    res.json({ success: true, balance: user.balance });
+});
+
+app.get('/api/users', authenticateToken, isAdmin, (req, res) => {
+    const usersData = users.map(u => ({
+        id: u.id,
+        username: u.username,
+        name: u.name,
+        balance: u.balance || 0,
+        is_admin: u.is_admin || 0
+    }));
+    res.json(usersData);
+});
+
+// ========================================
+// API - ОБЪЯВЛЕНИЯ
+// ========================================
+
+app.get('/api/ads', (req, res) => {
+    const approved = ads.filter(a => a.status === 'approved');
+    res.json(approved);
+});
+
+app.get('/api/ads/:id', (req, res) => {
+    const id = parseInt(req.params.id);
+    const ad = ads.find(a => a.id === id);
+    if (!ad) return res.status(404).json({ error: 'Не найдено' });
+    if (ad.status !== 'approved') return res.status(403).json({ error: 'Объявление на модерации' });
+    ad.views = (ad.views || 0) + 1;
+    saveAllData();
+    res.json(ad);
+});
+
+app.post('/api/ads', authenticateToken, upload.single('image'), (req, res) => {
+    try {
+        const { title, description, price, city, country, phone, category, priceType, deliveryTime } = req.body;
+        
+        if (!title || !title.trim()) {
+            return res.status(400).json({ error: 'Введите название товара!' });
+        }
+        if (!price || isNaN(parseFloat(price))) {
+            return res.status(400).json({ error: 'Введите цену товара!' });
+        }
+        if (!category || !category.trim()) {
+            return res.status(400).json({ error: 'Выберите категорию!' });
+        }
+        
+        if (category !== 'keys') {
+            if (!phone || !phone.trim()) {
+                return res.status(400).json({ error: 'Введите номер телефона!' });
+            }
+            const phoneClean = phone.replace(/\D/g, '');
+            if (!/^7\d{10}$/.test(phoneClean) && !/^8\d{10}$/.test(phoneClean)) {
+                return res.status(400).json({ error: 'Некорректный номер телефона!' });
+            }
+        }
+        
+        if (category === 'keys') {
+            if (!deliveryTime || parseInt(deliveryTime) < 1 || parseInt(deliveryTime) > 1440) {
+                return res.status(400).json({ error: 'Введите время доставки!' });
+            }
+        }
+        
+        let displayPrice = Number(price).toLocaleString() + ' ₽';
+        if (priceType === 'hour') {
+            displayPrice = Number(price).toLocaleString() + ' ₽/час';
+        } else if (priceType === 'negotiable') {
+            displayPrice = 'Договорная';
+        }
+        
+        const user = users.find(u => u.id === req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+        
+        const newAd = {
+            id: nextAdId++,
+            title: title.trim(),
+            description: (description || '').trim(),
+            price: parseFloat(price),
+            displayPrice,
+            priceType: priceType || 'fixed',
+            city: (city || 'Не указан').trim(),
+            country: (country || 'Россия').trim(),
+            phone: phone || '',
+            category,
+            date: new Date().toISOString(),
+            views: 0,
+            image: req.file ? `/uploads/${req.file.filename}` : null,
+            user_id: req.user.id,
+            user_name: user.name || 'Пользователь',
+            status: 'pending',
+            delivery_time: deliveryTime || null
+        };
+        
+        pendingAds.push(newAd);
+        saveAllData();
+        console.log('✅ Объявление создано:', newAd.id);
+        
+        res.status(201).json({ 
+            success: true, 
+            message: 'Объявление отправлено на модерацию', 
+            ad: newAd 
+        });
+    } catch (error) {
+        console.error('❌ Ошибка:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ========================================
+// API - МОДЕРАЦИЯ
+// ========================================
+
+app.get('/api/pending-ads', authenticateToken, isAdmin, (req, res) => {
+    res.json(pendingAds);
+});
+
+app.post('/api/approve-ad/:id', authenticateToken, isAdmin, (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const index = pendingAds.findIndex(a => a.id === id);
+        if (index === -1) {
+            return res.status(404).json({ error: 'Объявление не найдено' });
+        }
+        const ad = pendingAds[index];
+        ad.status = 'approved';
+        ads.push(ad);
+        pendingAds.splice(index, 1);
+        saveAllData();
+        res.json({ success: true, message: 'Объявление одобрено' });
+    } catch (error) {
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/reject-ad/:id', authenticateToken, isAdmin, (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { reason } = req.body;
+        const index = pendingAds.findIndex(a => a.id === id);
+        if (index === -1) {
+            return res.status(404).json({ error: 'Объявление не найдено' });
+        }
+        const ad = pendingAds[index];
+        const user = users.find(u => u.id === ad.user_id);
+        if (user) {
+            messages.push({
+                id: nextMessageId++,
+                user_id: user.id,
+                from_admin: true,
+                title: '❌ Объявление отклонено',
+                content: `Ваше объявление "${ad.title}" было отклонено.\n\nПричина: ${reason || 'Не указана'}`,
+                ad_id: ad.id,
+                ad_title: ad.title,
+                ad_price: ad.displayPrice,
+                ad_image: ad.image,
+                created_at: new Date().toISOString(),
+                type: 'rejection',
+                read: false
+            });
+            user.warnings = (user.warnings || 0) + 1;
+        }
+        pendingAds.splice(index, 1);
+        saveAllData();
+        res.json({ success: true, message: 'Объявление отклонено' });
+    } catch (error) {
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.delete('/api/ads/:id', authenticateToken, (req, res) => {
+    const id = parseInt(req.params.id);
+    ads = ads.filter(a => a.id !== id);
+    pendingAds = pendingAds.filter(a => a.id !== id);
+    saveAllData();
+    res.json({ message: 'Удалено' });
+});
+
+// ========================================
+// API - ЗАКАЗЫ
+// ========================================
+
+app.post('/api/buy/:adId', authenticateToken, (req, res) => {
+    try {
+        const adId = parseInt(req.params.adId);
+        const ad = ads.find(a => a.id === adId);
+        if (!ad) return res.status(404).json({ error: 'Товар не найден' });
+        if (ad.status === 'closed') return res.status(400).json({ error: 'Товар уже продан' });
+        if (ad.user_id === req.user.id) return res.status(400).json({ error: 'Нельзя купить свой товар' });
+        
+        const order = {
+            id: nextOrderId++,
+            ad_id: ad.id,
+            ad_title: ad.title,
+            ad_price: ad.price,
+            ad_image: ad.image,
+            buyer_id: req.user.id,
+            seller_id: ad.user_id,
+            status: 'pending',
+            created_at: new Date().toISOString(),
+            completed_at: null,
+            payment_confirmed: false,
+            email: req.body.email || null
+        };
+        orders.push(order);
+        ad.status = 'closed';
+        saveAllData();
+        
+        res.json({ 
+            success: true, 
+            order: order,
+            message: 'Заказ создан'
+        });
+    } catch (error) {
+        console.error('❌ Ошибка покупки:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/orders/:orderId/buyer-sent', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (order.buyer_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только покупатель может отметить отправку' });
+    }
+    if (order.status !== 'pending') {
+        return res.status(400).json({ error: 'Заказ уже обработан' });
+    }
+    order.status = 'buyer_sent';
+    saveAllData();
+    res.json({ success: true, order: order });
+});
+
+app.post('/api/orders/:orderId/dispute', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (order.seller_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только продавец может открыть спор' });
+    }
+    if (order.status !== 'buyer_sent') {
+        return res.status(400).json({ error: 'Нельзя открыть спор' });
+    }
+    order.status = 'dispute';
+    saveAllData();
+    res.json({ success: true, order: order });
+});
+
+app.post('/api/orders/:orderId/close-dispute', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const { action } = req.body;
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (req.user.username !== 'risha') {
+        return res.status(403).json({ error: 'Только поддержка может закрыть спор' });
+    }
+    order.status = action === 'closed' ? 'confirmed' : 'dispute';
+    saveAllData();
+    res.json({ success: true, order: order });
+});
+
+app.post('/api/orders/:orderId/transfer', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (req.user.username !== 'risha') {
+        return res.status(403).json({ error: 'Только поддержка может перевести средства' });
+    }
+    const seller = users.find(u => u.id === order.seller_id);
+    if (seller) {
+        seller.balance = (seller.balance || 0) + order.ad_price;
+    }
+    order.status = 'confirmed';
+    saveAllData();
+    res.json({ success: true, order: order });
+});
+
+app.post('/api/orders/:orderId/confirm', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (order.seller_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только продавец может подтвердить заказ' });
+    }
+    if (order.status !== 'buyer_sent') {
+        return res.status(400).json({ error: 'Нельзя подтвердить заказ' });
+    }
+    order.status = 'confirmed';
+    order.completed_at = new Date().toISOString();
+    const seller = users.find(u => u.id === order.seller_id);
+    if (seller) {
+        seller.balance = (seller.balance || 0) + order.ad_price;
+    }
+    saveAllData();
+    res.json({ success: true, order: order });
+});
+
+app.post('/api/orders/:orderId/cancel', authenticateToken, (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return res.status(404).json({ error: 'Заказ не найден' });
+    if (order.buyer_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только покупатель может отменить заказ' });
+    }
+    if (order.status !== 'pending') {
+        return res.status(400).json({ error: 'Нельзя отменить обработанный заказ' });
+    }
+    order.status = 'cancelled';
+    const ad = ads.find(a => a.id === order.ad_id);
+    if (ad) ad.status = 'approved';
+    saveAllData();
+    res.json({ success: true, order: order });
+});
+
+app.get('/api/orders', authenticateToken, (req, res) => {
+    try {
+        const { status } = req.query;
+        let userOrders = orders.filter(o => 
+            o.buyer_id === req.user.id || o.seller_id === req.user.id
+        );
+        if (status) {
+            userOrders = userOrders.filter(o => o.status === status);
+        }
+        const result = userOrders.map(o => {
+            const buyer = users.find(u => u.id === o.buyer_id);
+            const seller = users.find(u => u.id === o.seller_id);
+            return {
+                ...o,
+                buyer_name: buyer ? buyer.name || buyer.username : 'Неизвестно',
+                seller_name: seller ? seller.name || seller.username : 'Неизвестно'
+            };
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Ошибка загрузки заказов:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ========================================
+// API - ОТЗЫВЫ
+// ========================================
+
+app.get('/api/reviews/user/:userId', (req, res) => {
+    const userId = parseInt(req.params.userId);
+    const userReviews = reviews.filter(r => r.seller_id === userId);
+    const average = userReviews.length
+        ? (userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length)
+        : 0;
+    res.json({
+        reviews: userReviews,
+        average: Math.round(average * 10) / 10,
+        count: userReviews.length
+    });
+});
+
+app.get('/api/reviews/ad/:adId', (req, res) => {
+    const adId = parseInt(req.params.adId);
+    const adReviews = reviews.filter(r => r.ad_id === adId);
+    const average = adReviews.length
+        ? (adReviews.reduce((sum, r) => sum + r.rating, 0) / adReviews.length)
+        : 0;
+    res.json({
+        reviews: adReviews,
+        average: Math.round(average * 10) / 10,
+        count: adReviews.length
+    });
+});
+
+app.post('/api/reviews', authenticateToken, (req, res) => {
+    try {
+        const { ad_id, seller_id, rating, comment } = req.body;
+        const buyer_id = req.user.id;
+
+        if (!ad_id || !seller_id || !rating) {
+            return res.status(400).json({ error: 'Укажите объявление, продавца и оценку' });
+        }
+        if (rating < 1 || rating > 5) {
+            return res.status(400).json({ error: 'Оценка должна быть от 1 до 5' });
+        }
+
+        const order = orders.find(o => o.ad_id === ad_id && o.buyer_id === buyer_id && o.status === 'confirmed');
+        if (!order) {
+            return res.status(403).json({ error: 'Вы можете оставить отзыв только после подтверждённой покупки' });
+        }
+
+        const existing = reviews.find(r => r.ad_id === ad_id && r.buyer_id === buyer_id);
+        if (existing) {
+            return res.status(400).json({ error: 'Вы уже оставили отзыв на это объявление' });
+        }
+
+        const ad = ads.find(a => a.id === ad_id);
+        const newReview = {
+            id: nextReviewId++,
+            ad_id: ad_id,
+            ad_title: ad ? ad.title : 'Товар',
+            buyer_id: buyer_id,
+            seller_id: seller_id,
+            rating: parseInt(rating),
+            comment: comment || '',
+            created_at: new Date().toISOString()
+        };
+
+        reviews.push(newReview);
+        saveAllData();
+        res.status(201).json({ success: true, review: newReview });
+    } catch (error) {
+        console.error('❌ Ошибка создания отзыва:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ========================================
+// API - ЖАЛОБЫ
+// ========================================
+
+app.post('/api/complaints', authenticateToken, (req, res) => {
+    try {
+        const { ad_id, reason, comment } = req.body;
+        if (!ad_id || !reason) {
+            return res.status(400).json({ error: 'Укажите объявление и причину' });
+        }
+        const ad = ads.find(a => a.id === ad_id);
+        if (!ad) return res.status(404).json({ error: 'Объявление не найдено' });
+        complaints.push({
+            id: complaints.length + 1,
+            ad_id: ad_id,
+            reason: reason,
+            comment: comment || '',
+            status: 'pending',
+            created_at: new Date().toISOString()
+        });
+        saveAllData();
+        res.json({ success: true, message: 'Жалоба отправлена' });
+    } catch (error) {
+        console.error('❌ Ошибка отправки жалобы:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.get('/api/complaints', authenticateToken, isAdmin, (req, res) => {
+    try {
+        const result = complaints.filter(c => c.status === 'pending').map(c => {
+            const ad = ads.find(a => a.id === c.ad_id);
+            const user = users.find(u => u.id === ad?.user_id);
+            return {
+                ...c,
+                ad_title: ad?.title || 'Удалено',
+                ad_price: ad?.displayPrice || ad?.price || 0,
+                ad_image: ad?.image || null,
+                user_name: user?.name || 'Неизвестно'
+            };
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Ошибка загрузки жалоб:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.put('/api/complaints/:id', authenticateToken, isAdmin, (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { status } = req.body;
+        const complaint = complaints.find(c => c.id === id);
+        if (!complaint) return res.status(404).json({ error: 'Жалоба не найдена' });
+        complaint.status = status === 'false' ? 'false' : 'resolved';
+        saveAllData();
+        res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Ошибка обработки жалобы:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.delete('/api/complaints/:id/delete-ad', authenticateToken, isAdmin, (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const complaint = complaints.find(c => c.id === id);
+        if (!complaint) return res.status(404).json({ error: 'Жалоба не найдена' });
+        ads = ads.filter(a => a.id !== complaint.ad_id);
+        complaint.status = 'resolved';
+        saveAllData();
+        res.json({ success: true, message: 'Товар удалён' });
+    } catch (error) {
+        console.error('❌ Ошибка удаления товара:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ========================================
+// API - КАТЕГОРИИ
+// ========================================
+app.get('/api/categories', (req, res) => {
+    res.json([
+        { id: 'all', name: 'Все', icon: 'th-large' },
+        { id: 'electronics', name: 'Электроника', icon: 'laptop' },
+        { id: 'realty', name: 'Недвижимость', icon: 'building' },
+        { id: 'cars', name: 'Транспорт', icon: 'car' },
+        { id: 'clothes', name: 'Одежда', icon: 'tshirt' },
+        { id: 'services', name: 'Услуги', icon: 'wrench' },
+        { id: 'animals', name: 'Животные', icon: 'paw' },
+        { id: 'hobbies', name: 'Хобби', icon: 'gamepad' },
+        { id: 'keys', name: 'Ключи для игр', icon: 'key' }
+    ]);
+});
+
+// ========================================
+// API - ЧАТЫ
+// ========================================
+
+app.get('/api/chats', authenticateToken, (req, res) => {
+    const userChats = chats.filter(c => c.participants.includes(req.user.id));
+    const result = userChats.map(c => {
+        const otherId = c.participants.find(p => p !== req.user.id);
+        const other = users.find(u => u.id === otherId);
+        const lastMsg = c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1] : null;
+        return {
+            id: c.id,
+            other: other ? { id: other.id, username: other.username, name: other.name, avatar: other.avatar, prefix: other.prefix } : null,
+            lastMessage: lastMsg ? lastMsg.content : null,
+            lastMessageTime: lastMsg ? lastMsg.created_at : null,
+            unread: c.messages ? c.messages.filter(m => !m.read && m.sender_id !== req.user.id).length : 0
+        };
+    });
+    res.json(result);
+});
+
+app.get('/api/chats/:chatId/messages', authenticateToken, (req, res) => {
+    const chatId = parseInt(req.params.chatId);
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return res.status(404).json({ error: 'Чат не найден' });
+    if (!chat.participants.includes(req.user.id)) {
+        return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    if (chat.messages) {
+        chat.messages.forEach(m => {
+            if (m.sender_id !== req.user.id) m.read = true;
+        });
+        saveAllData();
+    }
+    res.json(chat.messages || []);
+});
+
+app.post('/api/chats', authenticateToken, (req, res) => {
+    const { otherUserId } = req.body;
+    if (!otherUserId) return res.status(400).json({ error: 'Укажите пользователя' });
+    if (otherUserId === req.user.id) return res.status(400).json({ error: 'Нельзя создать чат с собой' });
+    
+    let chat = chats.find(c => c.participants.includes(req.user.id) && c.participants.includes(otherUserId));
+    if (!chat) {
+        chat = {
+            id: nextChatId++,
+            participants: [req.user.id, otherUserId],
+            messages: [],
+            created_at: new Date().toISOString()
+        };
+        chats.push(chat);
+        saveAllData();
+    }
+    res.json(chat);
+});
+
+app.post('/api/chats/:chatId/messages', authenticateToken, (req, res) => {
+    const chatId = parseInt(req.params.chatId);
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Введите сообщение' });
+    
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return res.status(404).json({ error: 'Чат не найден' });
+    if (!chat.participants.includes(req.user.id)) {
+        return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+    
+    const message = {
+        id: nextMessageId++,
+        sender_id: req.user.id,
+        content: content,
+        created_at: new Date().toISOString(),
+        read: false
+    };
+    if (!chat.messages) chat.messages = [];
+    chat.messages.push(message);
+    saveAllData();
+    res.json(message);
+});
+
+// ========================================
+// API - СООБЩЕНИЯ (СИСТЕМНЫЕ)
+// ========================================
+
+app.get('/api/messages', authenticateToken, (req, res) => {
+    try {
+        const userMessages = messages.filter(m => m.user_id === req.user.id);
+        res.json(userMessages);
+    } catch (error) {
+        console.error('❌ Ошибка загрузки сообщений:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/messages', authenticateToken, (req, res) => {
+    try {
+        const { content, to_user_id, title, type } = req.body;
+        if (!content) return res.status(400).json({ error: 'Введите сообщение' });
+        
+        const user = users.find(u => u.id === req.user.id);
+        const message = {
+            id: nextMessageId++,
+            user_id: to_user_id || req.user.id,
+            from_admin: user?.is_admin || false,
+            title: title || null,
+            content: content,
+            created_at: new Date().toISOString(),
+            type: type || 'system',
+            read: false
+        };
+        messages.push(message);
+        saveAllData();
+        res.json({ success: true, message: message });
+    } catch (error) {
+        console.error('❌ Ошибка отправки сообщения:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+// ========================================
+// API - АДМИН-ПАНЕЛЬ
+// ========================================
+
+app.get('/api/admin/users', authenticateToken, isAdmin, (req, res) => {
+    const usersData = users.map(u => ({
+        id: u.id,
+        username: u.username,
+        name: u.name,
+        balance: u.balance || 0,
+        is_admin: u.is_admin || 0,
+        warnings: u.warnings || 0,
+        avatar: u.avatar || null
+    }));
+    res.json(usersData);
+});
+
+app.get('/api/admin/ads', authenticateToken, isAdmin, (req, res) => {
+    const allAds = [...ads, ...pendingAds].map(a => ({
+        id: a.id,
+        title: a.title,
+        price: a.price,
+        displayPrice: a.displayPrice,
+        status: a.status || 'pending',
+        category: a.category,
+        user_id: a.user_id,
+        user_name: a.user_name,
+        views: a.views || 0,
+        created_at: a.date || a.created_at
+    }));
+    res.json(allAds);
+});
+
+app.get('/api/admin/orders', authenticateToken, isAdmin, (req, res) => {
+    res.json(orders);
+});
+
+app.get('/api/admin/reviews', authenticateToken, isAdmin, (req, res) => {
+    res.json(reviews);
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, isAdmin, (req, res) => {
+    const userId = parseInt(req.params.id);
+    const index = users.findIndex(u => u.id === userId);
+    if (index === -1) return res.status(404).json({ error: 'Пользователь не найден' });
+    users.splice(index, 1);
+    saveAllData();
+    res.json({ success: true });
+});
+
+app.put('/api/admin/users/:id/toggle-admin', authenticateToken, isAdmin, (req, res) => {
+    const userId = parseInt(req.params.id);
+    const user = users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    user.is_admin = user.is_admin ? 0 : 1;
+    saveAllData();
+    res.json({ success: true, is_admin: user.is_admin });
+});
+
+app.delete('/api/admin/ads/:id', authenticateToken, isAdmin, (req, res) => {
+    const id = parseInt(req.params.id);
+    ads = ads.filter(a => a.id !== id);
+    pendingAds = pendingAds.filter(a => a.id !== id);
+    saveAllData();
+    res.json({ success: true });
+});
+
+app.put('/api/admin/complaints/:id', authenticateToken, isAdmin, (req, res) => {
+    const id = parseInt(req.params.id);
+    const complaint = complaints.find(c => c.id === id);
+    if (!complaint) return res.status(404).json({ error: 'Жалоба не найдена' });
+    complaint.status = 'resolved';
+    saveAllData();
+    res.json({ success: true });
+});
+
+// ========================================
+// HEALTH
+// ========================================
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        data: {
+            users: users.length,
+            ads: ads.length,
+            pendingAds: pendingAds.length,
+            orders: orders.length,
+            chats: chats.length
+        }
+    });
+});
+
+// ========================================
+// ЗАПУСК
+// ========================================
+app.listen(PORT, async () => {
+    await createTestUsers();
+    console.log('\n🚀 Сервер запущен на порту ' + PORT);
+    console.log('👑 Админы: notsynzxx / toto2023555, risha / risha2804account');
+    console.log('📦 API: /api/ads');
+    console.log('⭐ Отзывы: /api/reviews');
+    console.log('🛒 Заказы: /api/orders');
+    console.log('📷 Аватар: /api/upload-avatar');
+    console.log('💬 Чаты: /api/chats');
+    console.log('📨 Сообщения: /api/messages');
+    console.log('\n📁 Данные сохраняются в папку /data');
+    console.log('📊 Всего пользователей:', users.length);
+    console.log('📊 Всего объявлений:', ads.length);
+});

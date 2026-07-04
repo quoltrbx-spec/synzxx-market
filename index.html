@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SYNZXX — Доска объявлений</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* ======================================================== */
+        /* СТИЛИ ДЛЯ НОВОГО ЛОГОТИПА (VHS GLITCH)                  */
+        /* ======================================================== */
+        .glitch-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            position: relative;
+            padding: 4px 12px 4px 8px;
+            background: rgba(18, 7, 31, 0.4);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            transition: all 0.3s ease;
+        }
+
+        .glitch-logo:hover {
+            background: rgba(18, 7, 31, 0.6);
+            border-color: rgba(191, 0, 255, 0.1);
+        }
+
+        .glitch-icon {
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .glitch-icon svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 20px rgba(191, 0, 255, 0.2));
+        }
+
+        .glitch-text {
+            display: flex;
+            align-items: baseline;
+            gap: 2px;
+            position: relative;
+            flex-wrap: wrap;
+        }
+
+        .glitch-syn {
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #00F0FF 0%, #BF00FF 60%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Orbitron', sans-serif;
+            position: relative;
+        }
+
+        .glitch-syn::before {
+            content: 'SYN';
+            position: absolute;
+            top: 1px;
+            left: -1px;
+            background: linear-gradient(135deg, #00F0FF 0%, #BF00FF 60%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            clip-path: polygon(0 0, 100% 0, 80% 20%, 20% 80%, 0 100%);
+            opacity: 0.25;
+            transform: skewX(-1deg);
+        }
+
+        .glitch-zxx {
+            font-size: 26px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: linear-gradient(90deg, #BF00FF 0%, #FF007F 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Orbitron', sans-serif;
+            position: relative;
+            text-shadow: 2px 0 0 rgba(255, 0, 127, 0.3), -2px 0 0 rgba(0, 240, 255, 0.3);
+        }
+
+        .glitch-zxx::before {
+            content: 'ZXX';
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: linear-gradient(90deg, #BF00FF 0%, #FF007F 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            clip-path: inset(0 0 0 0);
+            opacity: 0.6;
+            transform: translateY(2px) scaleX(1.02);
+        }
+
+        .glitch-market {
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: 5px;
+            color: rgba(255, 255, 255, 0.2);
+            font-family: 'Inter', sans-serif;
+            margin-left: 6px;
+            position: relative;
+            text-transform: uppercase;
+        }
+
+        .glitch-market::before {
+            content: 'MARKET';
+            position: absolute;
+            top: 0;
+            left: 0;
+            color: rgba(255, 255, 255, 0.05);
+            clip-path: inset(0 40% 0 60%);
+            letter-spacing: 7px;
+        }
+
+        .glitch-logo::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, 
+                rgba(0, 240, 255, 0.03) 0%,
+                transparent 20%,
+                transparent 80%,
+                rgba(255, 0, 127, 0.03) 100%
+            );
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
+        .glitch-logo::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px,
+                rgba(0, 0, 0, 0.03) 4px
+            );
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        @keyframes glitchFlicker {
+            0%, 100% { opacity: 1; }
+            3% { opacity: 0.85; }
+            6% { opacity: 1; }
+            7% { opacity: 0.9; }
+            8% { opacity: 1; }
+        }
+        .glitch-logo {
+            animation: glitchFlicker 4s infinite;
+        }
+
+        @media (max-width: 768px) {
+            .glitch-icon {
+                width: 32px;
+                height: 32px;
+            }
+            .glitch-syn {
+                font-size: 16px;
+                letter-spacing: 1px;
+            }
+            .glitch-zxx {
+                font-size: 20px;
+                letter-spacing: 2px;
+            }
+            .glitch-market {
+                font-size: 9px;
+                letter-spacing: 3px;
+                margin-left: 4px;
+            }
+            .glitch-logo {
+                padding: 2px 8px 2px 4px;
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .glitch-icon {
+                width: 26px;
+                height: 26px;
+            }
+            .glitch-syn {
+                font-size: 13px;
+                letter-spacing: 0px;
+            }
+            .glitch-zxx {
+                font-size: 16px;
+                letter-spacing: 1px;
+            }
+            .glitch-market {
+                font-size: 7px;
+                letter-spacing: 2px;
+                margin-left: 2px;
+            }
+            .glitch-logo {
+                padding: 2px 4px 2px 4px;
+                gap: 4px;
+                border-radius: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- ======================================== -->
+    <!-- HEADER -->
+    <!-- ======================================== -->
+    <header class="header">
+        <div class="container">
+            <div class="header-top">
+                <div class="header-left">
+                    <a href="#" class="glitch-logo" id="logoLink">
+                        <div class="glitch-icon">
+                            <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <g opacity="0.10">
+                                    <path d="M14 44L30 20L22 32L44 18L28 34L36 24L18 46L14 44Z" fill="#BF00FF" transform="translate(-4, 4)"/>
+                                    <path d="M14 44L30 20L22 32L44 18L28 34L36 24L18 46L14 44Z" fill="#FF007F" transform="translate(4, -4)"/>
+                                    <path d="M14 44L30 20L22 32L44 18L28 34L36 24L18 46L14 44Z" fill="#00F0FF" transform="translate(0, 6)"/>
+                                </g>
+                                <g>
+                                    <path d="M10 14L24 14" stroke="url(#boltGrad)" stroke-width="4" stroke-linecap="square"/>
+                                    <path d="M24 14L18 24" stroke="url(#boltGrad)" stroke-width="4" stroke-linecap="square"/>
+                                    <path d="M22 28L26 34" stroke="url(#boltGrad)" stroke-width="4" stroke-linecap="square"/>
+                                    <path d="M24 38L30 46" stroke="url(#boltGrad)" stroke-width="4" stroke-linecap="square"/>
+                                    <path d="M30 46L42 46" stroke="url(#boltGrad)" stroke-width="4" stroke-linecap="square"/>
+                                    <rect x="46" y="20" width="10" height="2" fill="#FF007F" opacity="0.5"/>
+                                    <rect x="48" y="28" width="6" height="2" fill="#BF00FF" opacity="0.4"/>
+                                    <rect x="44" y="36" width="8" height="2" fill="#00F0FF" opacity="0.3"/>
+                                    <rect x="48" y="14" width="3" height="3" fill="#00F0FF" opacity="0.6"/>
+                                    <rect x="52" y="30" width="3" height="3" fill="#FF007F" opacity="0.7"/>
+                                    <rect x="50" y="40" width="4" height="4" fill="#BF00FF" opacity="0.5"/>
+                                    <rect x="46" y="8" width="2" height="2" fill="#FFFFFF" opacity="0.8"/>
+                                    <rect x="54" y="18" width="2" height="2" fill="#FFFFFF" opacity="0.6"/>
+                                </g>
+                                <g opacity="0.25">
+                                    <rect x="26" y="30" width="8" height="8" fill="#FFFFFF"/>
+                                    <rect x="28" y="32" width="4" height="4" fill="#BF00FF"/>
+                                </g>
+                                <defs>
+                                    <linearGradient id="boltGrad" x1="0" y1="0" x2="1" y2="1">
+                                        <stop offset="0%" stop-color="#00F0FF"/>
+                                        <stop offset="40%" stop-color="#BF00FF"/>
+                                        <stop offset="100%" stop-color="#FF007F"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                        </div>
+                        <div class="glitch-text">
+                            <span class="glitch-syn">SYN</span>
+                            <span class="glitch-zxx">ZXX</span>
+                            <span class="glitch-market">MARKET</span>
+                        </div>
+                    </a>
+                </div>
+                
+                <div class="header-right desktop-only">
+                    <div class="auth-buttons" id="authContainer">
+                        <div class="auth-links">
+                            <a href="#" id="loginBtn" class="auth-login-link">Войти</a>
+                            <span class="auth-divider">·</span>
+                            <a href="#" id="registerBtn" class="auth-register-link">Регистрация</a>
+                        </div>
+                    </div>
+                    
+                    <div class="user-profile" id="userProfile" style="display:none;">
+                        <button class="btn-profile" id="profileBtn">
+                            <img id="profileAvatar" src="" alt="avatar" class="profile-avatar">
+                            <span class="profile-name" id="profileName"></span>
+                            <span class="profile-prefix" id="profilePrefix"></span>
+                            <span class="profile-balance" id="profileBalance">0 ₽</span>
+                            <button class="btn-add-balance" id="addBalanceBtn">
+                                <i class="fas fa-plus-circle"></i>
+                            </button>
+                            <i class="fas fa-chevron-down" style="font-size:12px;color:rgba(255,255,255,0.3);"></i>
+                        </button>
+                        <div class="profile-dropdown" id="profileDropdown">
+                            <div class="dropdown-header">
+                                <div class="dropdown-avatar-wrapper">
+                                    <img id="dropdownAvatar" src="" alt="avatar" class="dropdown-avatar">
+                                </div>
+                                <div class="dropdown-user-info">
+                                    <div class="dropdown-username" id="dropdownUsername"></div>
+                                    <div class="dropdown-name" id="dropdownName"></div>
+                                    <div class="dropdown-prefix" id="dropdownPrefix"></div>
+                                    <div class="dropdown-balance">
+                                        Баланс: <span id="dropdownBalance">0</span> ₽
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" id="dropdownChangeName"><i class="fas fa-user-edit"></i> Сменить ник</div>
+                            <div class="dropdown-item" id="dropdownChats"><i class="fas fa-comments"></i> Чаты <span class="badge" id="chatsBadge">0</span></div>
+                            <div class="dropdown-item" id="dropdownMessages"><i class="fas fa-envelope"></i> Сообщения <span class="badge" id="messagesBadge">0</span></div>
+                            <div class="dropdown-item" id="dropdownOrders"><i class="fas fa-shopping-bag"></i> Заказы</div>
+                            <div class="dropdown-item admin-only" id="dropdownAdminMode" style="display:none;"><i class="fas fa-user-shield"></i> Режим проверки</div>
+                            <div class="dropdown-item admin-only" id="dropdownModeration" style="display:none;"><i class="fas fa-clipboard-list"></i> Модерация</div>
+                            <div class="dropdown-item admin-only" id="dropdownComplaints" style="display:none;"><i class="fas fa-flag"></i> Жалобы <span class="badge" id="complaintsBadge">0</span></div>
+                            <div class="dropdown-item admin-only" id="dropdownAddBalance" style="display:none;"><i class="fas fa-coins"></i> Пополнить баланс пользователя</div>
+                            <div class="dropdown-item admin-only" id="dropdownAdminPanel" style="display:none;"><i class="fas fa-server"></i> Админ-панель</div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item" id="dropdownTheme"><i class="fas fa-moon"></i> Тема <span class="theme-toggle" id="themeToggle"><span class="toggle-dot"></span></span></div>
+                            <div class="dropdown-item" id="dropdownLanguage"><i class="fas fa-globe"></i> Язык / Language <span class="lang-badge" id="currentLangBadge">🇷🇺 RU</span></div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-item dropdown-logout" id="dropdownLogout"><i class="fas fa-sign-out-alt"></i> Выйти</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="search-wrapper">
+                <div class="search-bar glass-effect">
+                    <i class="fas fa-search" style="color:rgba(255,255,255,0.3);padding-left:12px;"></i>
+                    <input type="text" placeholder="Что вы ищете на SYNZXX?" id="searchInput">
+                    <button class="btn-search"><i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ======================================== -->
+    <!-- ЛЕВАЯ ПАНЕЛЬ КАТЕГОРИЙ                   -->
+    <!-- ======================================== -->
+    <aside class="categories-sidebar" id="categoriesSidebar">
+        <div class="categories-glass">
+            <h3><i class="fas fa-tags"></i> Категории</h3>
+            <ul class="categories-list">
+                <li class="category-item active" data-category="all"><i class="fas fa-th-large"></i> <span>Все объявления</span></li>
+                <li class="category-item" data-category="realty"><i class="fas fa-building"></i> <span>Недвижимость</span></li>
+                <li class="category-item" data-category="cars"><i class="fas fa-car"></i> <span>Транспорт</span></li>
+                <li class="category-item" data-category="electronics"><i class="fas fa-laptop"></i> <span>Электроника</span></li>
+                <li class="category-item" data-category="clothes"><i class="fas fa-tshirt"></i> <span>Одежда</span></li>
+                <li class="category-item" data-category="services"><i class="fas fa-wrench"></i> <span>Услуги</span></li>
+                <li class="category-item" data-category="animals"><i class="fas fa-paw"></i> <span>Животные</span></li>
+                <li class="category-item" data-category="hobbies"><i class="fas fa-gamepad"></i> <span>Хобби</span></li>
+                <li class="category-item" data-category="keys"><i class="fas fa-key"></i> <span>Ключи для игр</span></li>
+            </ul>
+            <button class="btn-sell" id="sellBtn"><i class="fas fa-plus-circle"></i> Продать</button>
+        </div>
+    </aside>
+
+    <!-- ======================================== -->
+    <!-- ОСНОВНОЙ КОНТЕНТ                        -->
+    <!-- ======================================== -->
+    <main class="main-content" id="mainContent">
+        <div class="container main-container">
+            <button class="btn-toggle-categories" id="toggleCategories">
+                <i class="fas fa-bars"></i> Категории
+            </button>
+            <div id="adsListView">
+                <div class="ads-header">
+                    <h2>🔥 Свежие объявления</h2>
+                    <span class="ads-count" id="adsCount">Загрузка...</span>
+                </div>
+                <div class="ads-grid" id="adsGrid"></div>
+            </div>
+            <div id="adDetailView" style="display:none;">
+                <button class="btn-back" id="backToAds"><i class="fas fa-arrow-left"></i> Назад</button>
+                <div class="ad-detail-wrapper">
+                    <div class="ad-detail-card glass-effect" id="adDetailCard"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ======================================== -->
+    <!-- СКРЫТЫЙ INPUT ДЛЯ ЗАГРУЗКИ АВАТАРА       -->
+    <!-- ======================================== -->
+    <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+
+    <!-- ======================================== -->
+    <!-- МОДАЛКИ                                  -->
+    <!-- ======================================== -->
+
+    <!-- АВТОРИЗАЦИЯ -->
+    <div class="modal" id="authModal">
+        <div class="modal-content glass-effect" style="max-width:420px;">
+            <span class="modal-close" id="authModalClose">&times;</span>
+            <h2 id="authTitle">🔐 Вход в аккаунт</h2>
+            <form id="authForm">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Логин</label>
+                    <input type="text" id="authUsername" required placeholder="Введите логин">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Пароль</label>
+                    <input type="password" id="authPassword" required placeholder="Введите пароль">
+                </div>
+                <div class="form-group auth-extra-fields" style="display:none;">
+                    <label><i class="fas fa-lock"></i> Повторите пароль</label>
+                    <input type="password" id="authPassword2" placeholder="Повторите пароль">
+                </div>
+                <div class="form-group auth-extra-fields" style="display:none;">
+                    <label><i class="fas fa-user-circle"></i> Имя</label>
+                    <input type="text" id="authName" placeholder="Ваше имя">
+                </div>
+                <button type="submit" class="btn btn-primary btn-full" id="authSubmitBtn">Войти</button>
+            </form>
+            <div class="auth-switch">
+                <a href="#" id="toggleAuthLink">Нет аккаунта? <span>Зарегистрироваться</span></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- СМЕНА НИКА -->
+    <div class="modal" id="changeNameModal">
+        <div class="modal-content glass-effect" style="max-width:400px;">
+            <span class="modal-close" id="changeNameClose">&times;</span>
+            <h2><i class="fas fa-user-edit"></i> Сменить ник</h2>
+            <form id="changeNameForm">
+                <div class="form-group">
+                    <label>Новый ник</label>
+                    <input type="text" id="newName" required placeholder="Введите новый ник">
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- СОЗДАНИЕ ОБЪЯВЛЕНИЯ -->
+    <div class="modal" id="createModal">
+        <div class="modal-content glass-effect">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <h2><i class="fas fa-plus-circle"></i> Выставить на продажу</h2>
+            <form id="adForm" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label><i class="fas fa-image"></i> Фото</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" id="adImage" accept="image/*" class="file-input">
+                        <div class="file-upload-preview" id="imagePreview">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>Нажмите или перетащите фото</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-heading"></i> Название *</label>
+                    <input type="text" id="adTitle" required placeholder="Введите название">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-align-left"></i> Описание</label>
+                    <textarea id="adDescription" rows="4" placeholder="Опишите товар"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-ruble-sign"></i> Цена *</label>
+                        <div class="price-input-wrapper">
+                            <input type="number" id="adPrice" required placeholder="Введите цену">
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                            <button type="button" id="priceFixedBtn" class="price-type-btn active">₽</button>
+                            <button type="button" id="priceHourBtn" class="price-type-btn">За час</button>
+                            <button type="button" id="priceNegotiableBtn" class="price-type-btn">Договорная</button>
+                        </div>
+                        <div id="priceDisplay" style="font-size:12px;color:rgba(255,255,255,0.3);margin-top:6px;">₽</div>
+                        <input type="hidden" id="adPriceType" value="fixed">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-map-marker-alt"></i> Город</label>
+                        <input type="text" id="adCity" placeholder="Москва">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-tag"></i> Категория *</label>
+                    <div class="category-select-wrapper">
+                        <div class="category-select" id="categorySelect">
+                            <span id="selectedCategoryName">Выберите категорию</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="category-dropdown" id="categoryDropdown">
+                            <div class="category-option" data-value="electronics"><i class="fas fa-laptop"></i> Электроника</div>
+                            <div class="category-option" data-value="realty"><i class="fas fa-building"></i> Недвижимость</div>
+                            <div class="category-option" data-value="cars"><i class="fas fa-car"></i> Транспорт</div>
+                            <div class="category-option" data-value="clothes"><i class="fas fa-tshirt"></i> Одежда</div>
+                            <div class="category-option" data-value="services"><i class="fas fa-wrench"></i> Услуги</div>
+                            <div class="category-option" data-value="animals"><i class="fas fa-paw"></i> Животные</div>
+                            <div class="category-option" data-value="hobbies"><i class="fas fa-gamepad"></i> Хобби</div>
+                            <div class="category-option" data-value="keys"><i class="fas fa-key"></i> Ключи для игр</div>
+                        </div>
+                        <input type="hidden" id="adCategory" value="">
+                    </div>
+                </div>
+                <div class="form-group" id="phoneGroup">
+                    <label><i class="fas fa-phone"></i> Телефон *</label>
+                    <input type="tel" id="adPhone" placeholder="+7 (999) 123-45-67">
+                </div>
+                <div class="form-group" id="deliveryGroup" style="display:none;">
+                    <label><i class="fas fa-clock"></i> Время доставки (макс 24 часа) *</label>
+                    <input type="number" id="deliveryTime" min="1" max="1440" placeholder="Введите время в минутах (1-1440)">
+                    <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-top:4px;">Минимум 1 минута, максимум 24 часа (1440 минут)</div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full" id="publishBtn"><i class="fas fa-rocket"></i> Опубликовать</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- КОНТАКТЫ -->
+    <div class="modal" id="contactModal">
+        <div class="modal-content glass-effect" style="max-width:420px;text-align:center;">
+            <span class="modal-close" id="contactModalClose">&times;</span>
+            <div class="contact-modal-icon"><i class="fas fa-phone-alt"></i></div>
+            <h3 style="font-size:20px;color:#fff;">Связаться с продавцом</h3>
+            <p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:20px;">Номер телефона</p>
+            <div class="contact-phone-display">
+                <i class="fas fa-phone"></i>
+                <span id="contactPhoneNumber">+7 (999) 123-45-67</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-direction:column;margin-top:10px;">
+                <button class="btn btn-primary btn-full" id="contactCallBtn">
+                    <i class="fas fa-phone"></i> Позвонить
+                </button>
+                <button class="btn btn-success btn-full" id="contactChatBtn">
+                    <i class="fas fa-comment-dots"></i> Связаться в чате
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ПОПОЛНЕНИЕ БАЛАНСА -->
+    <div class="modal" id="addBalanceModal">
+        <div class="modal-content glass-effect" style="max-width:420px;text-align:center;">
+            <span class="modal-close" id="addBalanceModalClose">&times;</span>
+            <div style="font-size:48px;margin-bottom:12px;">💰</div>
+            <h2 style="font-size:22px;color:#fff;">Пополнить баланс</h2>
+            <p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:20px;">Выберите способ оплаты</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <button class="btn btn-primary btn-full" id="payStarsBtn">
+                    <i class="fab fa-telegram"></i> Telegram Stars
+                </button>
+                <button class="btn btn-glass btn-full" id="payTransferBtn" disabled style="opacity:0.5;">
+                    <i class="fas fa-university"></i> Перевод на счёт (скоро)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INSTRUCTION TELEGRAM STARS -->
+    <div class="modal" id="starsInstructionModal">
+        <div class="modal-content glass-effect" style="max-width:420px;text-align:center;">
+            <span class="modal-close" id="starsInstructionClose">&times;</span>
+            <div style="font-size:48px;margin-bottom:12px;">⭐</div>
+            <h2 style="font-size:22px;color:#fff;">Telegram Stars</h2>
+            <p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:20px;">Пополнение баланса через Telegram Stars</p>
+            <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin-bottom:16px;text-align:left;">
+                <p style="color:rgba(255,255,255,0.6);font-size:14px;margin-bottom:8px;">1. Отправьте Stars на аккаунт:</p>
+                <p style="color:#60a5fa;font-size:18px;font-weight:700;text-align:center;">@notsynzxx</p>
+                <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-top:8px;">2. В комментарии укажите ваш логин: <strong id="starsUsernameDisplay"></strong></p>
+                <p style="color:rgba(255,255,255,0.4);font-size:13px;">3. За 1 Star вы получаете 1 ₽ на баланс</p>
+            </div>
+            <button class="btn btn-primary btn-full" id="starsConfirmBtn">
+                <i class="fas fa-check"></i> Я отправил(а) Stars
+            </button>
+        </div>
+    </div>
+
+    <!-- ПОПОЛНЕНИЕ БАЛАНСА (АДМИН/ПОДДЕРЖКА) -->
+    <div class="modal" id="adminAddBalanceModal">
+        <div class="modal-content glass-effect" style="max-width:500px;">
+            <span class="modal-close" id="adminAddBalanceClose">&times;</span>
+            <h2><i class="fas fa-coins"></i> Пополнить баланс пользователя</h2>
+            <div class="form-group">
+                <label>Поиск пользователя</label>
+                <input type="text" id="adminUserSearch" placeholder="Введите ник пользователя...">
+                <div id="adminUserResults" style="margin-top:8px;max-height:200px;overflow-y:auto;"></div>
+            </div>
+            <div id="adminBalanceForm" style="display:none;">
+                <div class="form-group">
+                    <label>Пользователь</label>
+                    <input type="text" id="adminSelectedUser" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Сумма пополнения (₽)</label>
+                    <input type="number" id="adminBalanceAmount" placeholder="1000">
+                </div>
+                <button class="btn btn-primary btn-full" id="adminBalanceSubmit">
+                    <i class="fas fa-coins"></i> Пополнить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- АДМИН-ПАНЕЛЬ -->
+    <div class="modal" id="adminPanelModal">
+        <div class="modal-content glass-effect" style="max-width:90%;max-height:90vh;">
+            <span class="modal-close" id="adminPanelModalClose">&times;</span>
+            <h2><i class="fas fa-server"></i> Админ-панель</h2>
+            <div id="adminPanelContent">
+                <p style="color:rgba(255,255,255,0.3);">Загрузка...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ЗАКАЗЫ -->
+    <div class="modal" id="ordersModal">
+        <div class="modal-content glass-effect" style="max-width:700px;">
+            <span class="modal-close" id="ordersModalClose">&times;</span>
+            <h2><i class="fas fa-shopping-bag"></i> Заказы</h2>
+            <div class="orders-filter">
+                <button class="btn btn-small btn-glass active" data-filter="all">Все</button>
+                <button class="btn btn-small btn-glass" data-filter="pending">В процессе</button>
+                <button class="btn btn-small btn-glass" data-filter="confirmed">Выполненные</button>
+                <button class="btn btn-small btn-glass" data-filter="cancelled">Отменённые</button>
+            </div>
+            <div id="ordersList"><p style="color:rgba(255,255,255,0.3);text-align:center;padding:20px;">Нет заказов</p></div>
+        </div>
+    </div>
+
+    <!-- ЧАТЫ -->
+    <div class="modal" id="chatsModal">
+        <div class="modal-content glass-effect" style="max-width:600px;">
+            <span class="modal-close" id="chatsModalClose">&times;</span>
+            <h2><i class="fas fa-comments"></i> Чаты</h2>
+            <div id="chatsList"><p style="color:rgba(255,255,255,0.3);text-align:center;padding:20px;">Нет чатов</p></div>
+        </div>
+    </div>
+
+    <!-- ЧАТ -->
+    <div class="modal" id="chatModal">
+        <div class="modal-content glass-effect" style="max-width:600px;max-height:90vh;">
+            <span class="modal-close" id="chatModalClose" style="position:absolute;top:12px;right:16px;font-size:28px;cursor:pointer;color:rgba(255,255,255,0.2);padding:8px;background:none;border:none;line-height:1;">&times;</span>
+            <div id="chatMessagesContainer" style="max-height:60vh;overflow-y:auto;padding:10px;margin-top:20px;"></div>
+            <div style="display:flex;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
+                <input type="text" id="chatInput" placeholder="Написать сообщение..." style="flex:1;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;font-size:14px;color:#fff;outline:none;font-family:inherit;">
+                <button onclick="sendChatMessage()" id="chatSendBtn" style="padding:12px 18px;background:linear-gradient(135deg,#007bff,#6366f1);border:none;border-radius:12px;color:#fff;cursor:pointer;font-size:16px;min-width:48px;font-family:inherit;">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- СООБЩЕНИЯ -->
+    <div class="modal" id="messagesModal">
+        <div class="modal-content glass-effect" style="max-width:600px;">
+            <span class="modal-close" id="messagesModalClose">&times;</span>
+            <h2><i class="fas fa-envelope"></i> Сообщения</h2>
+            <div id="messagesList"><p style="color:rgba(255,255,255,0.3);text-align:center;padding:20px;">Нет сообщений</p></div>
+        </div>
+    </div>
+
+    <!-- ЖАЛОБЫ (АДМИН) -->
+    <div class="modal" id="complaintsModal">
+        <div class="modal-content glass-effect" style="max-width:700px;">
+            <span class="modal-close" id="complaintsModalClose">&times;</span>
+            <h2><i class="fas fa-flag"></i> Жалобы</h2>
+            <div id="complaintsList"><p style="color:rgba(255,255,255,0.3);text-align:center;padding:20px;">Нет активных жалоб</p></div>
+        </div>
+    </div>
+
+    <!-- ОТПРАВКА ЖАЛОБЫ -->
+    <div class="modal" id="complaintModal">
+        <div class="modal-content glass-effect" style="max-width:460px;">
+            <span class="modal-close" id="complaintModalClose">&times;</span>
+            <div style="text-align:center;margin-bottom:20px;">
+                <div style="width:64px;height:64px;border-radius:50%;background:rgba(239,68,68,0.15);border:2px solid rgba(239,68,68,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px;color:#ef4444;"><i class="fas fa-flag"></i></div>
+                <h3 style="font-size:20px;color:#fff;">Пожаловаться</h3>
+                <p style="color:rgba(255,255,255,0.4);font-size:14px;">Выберите причину</p>
+            </div>
+            <form id="complaintForm">
+                <div class="form-group"><label class="complaint-option"><input type="radio" name="complaintReason" value="spam"><span>Спам или мошенничество</span></label></div>
+                <div class="form-group"><label class="complaint-option"><input type="radio" name="complaintReason" value="fake"><span>Поддельный товар</span></label></div>
+                <div class="form-group"><label class="complaint-option"><input type="radio" name="complaintReason" value="price"><span>Завышенная цена</span></label></div>
+                <div class="form-group"><label class="complaint-option"><input type="radio" name="complaintReason" value="wrong"><span>Неверная категория</span></label></div>
+                <div class="form-group"><label class="complaint-option"><input type="radio" name="complaintReason" value="other"><span>Другая причина</span></label></div>
+                <div class="form-group"><label style="display:block;font-weight:500;font-size:13px;color:rgba(255,255,255,0.5);"><i class="fas fa-comment"></i> Комментарий</label><textarea id="complaintComment" rows="3" placeholder="Опишите подробнее..." style="width:100%;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;font-size:15px;color:#fff;font-family:inherit;resize:vertical;"></textarea></div>
+                <button type="submit" class="btn-danger btn-full"><i class="fas fa-paper-plane"></i> Отправить жалобу</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- МОДЕРАЦИЯ (АДМИН) -->
+    <div class="modal" id="moderationModal">
+        <div class="modal-content glass-effect" style="max-width:700px;">
+            <span class="modal-close" id="moderationModalClose">&times;</span>
+            <h2><i class="fas fa-clipboard-list"></i> Модерация</h2>
+            <div id="moderationList"><p style="color:rgba(255,255,255,0.3);text-align:center;padding:20px;">Нет объявлений на модерации</p></div>
+        </div>
+    </div>
+
+    <!-- ВЫБОР ЯЗЫКА -->
+    <div class="modal" id="languageModal">
+        <div class="modal-content glass-effect" style="max-width:400px;text-align:center;">
+            <span class="modal-close" id="languageModalClose">&times;</span>
+            <div style="font-size:48px;margin-bottom:12px;">🌍</div>
+            <h2 style="font-size:22px;color:#fff;" id="langModalTitle">Выберите язык / Select Language</h2>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;">
+                <button class="btn btn-primary btn-full lang-option" data-lang="ru" style="display:flex;align-items:center;justify-content:center;gap:12px;">
+                    <span style="font-size:24px;">🇷🇺</span>
+                    <span>Русский</span>
+                </button>
+                <button class="btn btn-glass btn-full lang-option" data-lang="en" style="display:flex;align-items:center;justify-content:center;gap:12px;">
+                    <span style="font-size:24px;">🇬🇧</span>
+                    <span>English</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EMAIL ДЛЯ КЛЮЧЕЙ -->
+    <div class="modal" id="emailModal">
+        <div class="modal-content glass-effect" style="max-width:420px;text-align:center;">
+            <span class="modal-close" id="emailModalClose">&times;</span>
+            <div style="font-size:48px;margin-bottom:12px;">✉️</div>
+            <h2 style="font-size:22px;color:#fff;">Введите электронную почту</h2>
+            <p style="color:rgba(255,255,255,0.4);font-size:14px;margin-bottom:20px;">Для получения ключа для игры</p>
+            <div class="form-group">
+                <input type="email" id="emailInput" placeholder="example@mail.com" style="width:100%;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;font-size:15px;color:#fff;font-family:inherit;">
+            </div>
+            <button onclick="confirmEmailBuy()" class="btn btn-primary btn-full" style="padding:14px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:12px;color:#fff;font-weight:700;font-size:16px;cursor:pointer;width:100%;font-family:inherit;">
+                <i class="fas fa-arrow-right"></i> Далее
+            </button>
+        </div>
+    </div>
+
+    <!-- ОТЗЫВЫ (РЕЙТИНГИ) -->
+    <div class="modal" id="reviewModal">
+        <div class="modal-content glass-effect" style="max-width:450px;">
+            <span class="modal-close" onclick="closeModal('reviewModal')">&times;</span>
+            <h2 style="text-align:center;"><i class="fas fa-star" style="color:#f59e0b;"></i> Оставить отзыв</h2>
+            <div style="text-align:center;margin:20px 0;">
+                <div id="reviewStars" style="font-size:28px;display:flex;justify-content:center;gap:8px;"></div>
+            </div>
+            <div class="form-group">
+                <label>Комментарий к отзыву</label>
+                <textarea id="reviewComment" rows="3" placeholder="Опишите ваш опыт..." style="width:100%;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;font-size:15px;color:#fff;font-family:inherit;resize:vertical;"></textarea>
+            </div>
+            <button id="reviewSubmitBtn" onclick="submitReview()" class="btn btn-primary btn-full" style="padding:14px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:12px;color:#fff;font-weight:700;font-size:16px;cursor:pointer;width:100%;font-family:inherit;">
+                <i class="fas fa-paper-plane"></i> Отправить отзыв
+            </button>
+        </div>
+    </div>
+
+    <!-- ПЕРЕВОД СРЕДСТВ (ДЛЯ ПОДДЕРЖКИ) -->
+    <div class="modal" id="transferModal">
+        <div class="modal-content glass-effect" style="max-width:450px;">
+            <span class="modal-close" onclick="closeModal('transferModal')">&times;</span>
+            <h2 style="font-size:22px;color:#fff;text-align:center;">Перевести продавцу средства на баланс</h2>
+            <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:16px;margin:16px 0;">
+                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <span style="color:rgba(255,255,255,0.5);">НИК ПРОДАВЦА:</span>
+                    <span style="color:#60a5fa;font-weight:600;" id="transferSellerNick">-</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;">
+                    <span style="color:rgba(255,255,255,0.5);">СТОИМОСТЬ ТОВАРА:</span>
+                    <span style="color:#f59e0b;font-weight:600;" id="transferProductCost">-</span>
+                </div>
+            </div>
+            <button onclick="transferMoneyToSeller()" class="btn btn-primary btn-full" style="padding:14px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:12px;color:#fff;font-weight:700;font-size:16px;cursor:pointer;width:100%;font-family:inherit;">
+                <i class="fas fa-exchange-alt"></i> Перевести
+            </button>
+        </div>
+    </div>
+
+    <!-- ======================================== -->
+    <!-- МОБИЛЬНАЯ НАВИГАЦИЯ                      -->
+    <!-- ======================================== -->
+    <nav class="mobile-nav" id="mobileNav">
+        <div class="mobile-nav-container">
+            <div class="mobile-auth-buttons" id="mobileAuthContainer" style="display:flex;">
+                <button class="mobile-nav-btn mobile-login-btn" id="mobileLoginBtn" style="display:flex;">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Войти</span>
+                </button>
+                <button class="mobile-nav-btn mobile-register-btn" id="mobileRegisterBtn" style="display:flex;">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Регистрация</span>
+                </button>
+            </div>
+            <div class="mobile-profile" id="mobileProfile" style="display:none;">
+                <button class="mobile-profile-btn" id="mobileProfileBtn">
+                    <div class="mobile-profile-avatar-wrapper">
+                        <img id="mobileProfileAvatar" src="" alt="avatar" class="mobile-profile-avatar">
+                    </div>
+                    <div class="mobile-profile-info">
+                        <span class="mobile-profile-name" id="mobileProfileName">Загрузка...</span>
+                        <span class="mobile-profile-balance" id="mobileProfileBalance">0 ₽</span>
+                    </div>
+                    <i class="fas fa-chevron-up mobile-profile-arrow" id="mobileProfileArrow"></i>
+                </button>
+            </div>
+            <div class="mobile-sell-btn-wrapper">
+                <button class="mobile-nav-btn mobile-sell" id="mobileSellBtn">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Продать</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- МОБИЛЬНОЕ МЕНЮ ПРОФИЛЯ -->
+    <div class="mobile-profile-menu" id="mobileProfileMenu">
+        <div class="mobile-profile-menu-header">
+            <div class="mobile-profile-menu-avatar-wrapper">
+                <img id="mobileMenuAvatar" src="" alt="avatar" class="mobile-menu-avatar">
+            </div>
+            <div class="mobile-profile-menu-info">
+                <div class="mobile-menu-username" id="mobileMenuUsername"></div>
+                <div class="mobile-menu-name" id="mobileMenuName"></div>
+                <div class="mobile-menu-prefix" id="mobileMenuPrefix"></div>
+                <div class="mobile-menu-balance">
+                    Баланс: <span id="mobileMenuBalance">0</span> ₽
+                </div>
+            </div>
+            <button class="mobile-menu-close" id="mobileMenuClose"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="mobile-menu-divider"></div>
+        
+        <div class="mobile-menu-item" id="mobileMenuChangeName" onclick="closeMobileMenu();setTimeout(()=>openModal('changeNameModal'),300)">
+            <i class="fas fa-user-edit"></i> Сменить ник
+        </div>
+        
+        <div class="mobile-menu-item" id="mobileMenuChats" onclick="closeMobileMenu();setTimeout(()=>{openModal('chatsModal');loadChats()},300)">
+            <i class="fas fa-comments"></i> Чаты <span class="badge" id="mobileChatsBadge">0</span>
+        </div>
+        
+        <div class="mobile-menu-item" id="mobileMenuMessages" onclick="closeMobileMenu();setTimeout(()=>{openModal('messagesModal');loadMessages()},300)">
+            <i class="fas fa-envelope"></i> Сообщения <span class="badge" id="mobileMessagesBadge">0</span>
+        </div>
+        
+        <div class="mobile-menu-item" id="mobileMenuOrders" onclick="closeMobileMenu();setTimeout(()=>{openModal('ordersModal');renderOrders('all')},300)">
+            <i class="fas fa-shopping-bag"></i> Заказы
+        </div>
+        
+        <div class="mobile-menu-item admin-only" id="mobileMenuAdminMode" style="display:none;" onclick="closeMobileMenu();if(currentUser&&currentUser.username==='notsynzxx'){adminModeEnabled=!adminModeEnabled;showNotification(adminModeEnabled?'🔧 Режим проверки ВКЛЮЧЕН':'🔧 Режим проверки ВЫКЛЮЧЕН','info');updateUI()}else{showNotification('⚠️ Требуются права администратора','warning')}">
+            <i class="fas fa-user-shield"></i> Режим проверки
+        </div>
+        
+        <div class="mobile-menu-item admin-only" id="mobileMenuModeration" style="display:none;" onclick="closeMobileMenu();setTimeout(()=>{openModal('moderationModal');loadPendingAds()},300)">
+            <i class="fas fa-clipboard-list"></i> Модерация
+        </div>
+        
+        <div class="mobile-menu-item admin-only" id="mobileMenuComplaints" style="display:none;" onclick="closeMobileMenu();setTimeout(()=>{openModal('complaintsModal');renderComplaints()},300)">
+            <i class="fas fa-flag"></i> Жалобы <span class="badge" id="mobileComplaintsBadge">0</span>
+        </div>
+        
+        <div class="mobile-menu-item admin-only" id="mobileMenuAddBalance" style="display:none;" onclick="closeMobileMenu();setTimeout(()=>{openModal('adminAddBalanceModal');document.getElementById('adminUserSearch').value='';document.getElementById('adminUserResults').innerHTML='';document.getElementById('adminSelectedUser').value='';document.getElementById('adminBalanceForm').style.display='none';selectedUserId=null},300)">
+            <i class="fas fa-coins"></i> Пополнить баланс пользователя
+        </div>
+        
+        <div class="mobile-menu-divider"></div>
+        
+        <div class="mobile-menu-item" id="mobileMenuTheme" onclick="closeMobileMenu();document.body.classList.toggle('light-theme');const isLight=document.body.classList.contains('light-theme');localStorage.setItem('synzxx_theme',isLight?'light':'dark');document.querySelectorAll('.theme-toggle').forEach(el=>el.classList.toggle('active',isLight))">
+            <i class="fas fa-moon"></i> Тема <span class="theme-toggle mobile-theme-toggle" id="mobileThemeToggle"><span class="toggle-dot"></span></span>
+        </div>
+        
+        <div class="mobile-menu-item" id="mobileMenuLanguage" onclick="closeMobileMenu();setTimeout(()=>openModal('languageModal'),300)">
+            <i class="fas fa-globe"></i> Язык / Language <span class="lang-badge" id="mobileLangBadge">🇷🇺 RU</span>
+        </div>
+        
+        <div class="mobile-menu-divider"></div>
+        
+        <div class="mobile-menu-item mobile-menu-logout" id="mobileMenuLogout" onclick="closeMobileMenu();setTimeout(()=>logoutUser(),300)">
+            <i class="fas fa-sign-out-alt"></i> Выйти
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
