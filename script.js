@@ -518,7 +518,6 @@ let usersData = [];
 function updateUI() {
     console.log('🔄 updateUI() вызван, currentUser:', currentUser);
     
-    // === ДЕСКТОП ЭЛЕМЕНТЫ ===
     const authContainer = document.getElementById('authContainer');
     const userProfile = document.getElementById('userProfile');
     const profileName = document.getElementById('profileName');
@@ -540,7 +539,6 @@ function updateUI() {
     const adminAddBalance = document.getElementById('dropdownAddBalance');
     const adminPanel = document.getElementById('dropdownAdminPanel');
     
-    // === МОБИЛЬНЫЕ ЭЛЕМЕНТЫ ===
     const mobileAuthContainer = document.getElementById('mobileAuthContainer');
     const mobileProfile = document.getElementById('mobileProfile');
     const mobileProfileName = document.getElementById('mobileProfileName');
@@ -556,35 +554,24 @@ function updateUI() {
     const mobileLoginBtn = document.getElementById('mobileLoginBtn');
     const mobileRegisterBtn = document.getElementById('mobileRegisterBtn');
     
-    console.log('📱 mobileLoginBtn найден:', !!mobileLoginBtn);
-    console.log('📱 mobileRegisterBtn найден:', !!mobileRegisterBtn);
-    
     if (currentUser) {
-        console.log('✅ Пользователь авторизован, показываем профиль');
-        
-        // === ДЕСКТОП ===
         if (authContainer) authContainer.style.display = 'none';
         if (userProfile) userProfile.style.display = 'flex';
         
-        // === МОБИЛЬНЫЙ ПРОФИЛЬ ===
         if (mobileAuthContainer) mobileAuthContainer.style.display = 'none';
         if (mobileProfile) mobileProfile.style.display = 'block';
-        
-        // Скрываем кнопки входа/регистрации
         if (mobileLoginBtn) mobileLoginBtn.style.display = 'none';
         if (mobileRegisterBtn) mobileRegisterBtn.style.display = 'none';
         
         const name = currentUser.name || currentUser.username;
         const balance = currentUser.balance || 0;
         
-        // === ДЕСКТОП ===
         if (profileName) profileName.textContent = name;
         if (dropdownUsername) dropdownUsername.textContent = '@' + currentUser.username;
         if (dropdownName) dropdownName.textContent = name;
         if (profileBalance) profileBalance.textContent = balance + ' ₽';
         if (dropdownBalance) dropdownBalance.textContent = balance;
         
-        // === МОБИЛЬНАЯ ПАНЕЛЬ ===
         if (mobileProfileName) mobileProfileName.textContent = name;
         if (mobileProfileBalance) mobileProfileBalance.textContent = balance + ' ₽';
         if (mobileMenuName) mobileMenuName.textContent = name;
@@ -592,14 +579,12 @@ function updateUI() {
         if (mobileMenuBalance) mobileMenuBalance.textContent = balance;
         if (mobileProfileArrow) mobileProfileArrow.classList.remove('open');
         
-        // === АВАТАРКИ ===
         const avatarUrl = currentUser.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=6366f1&color=fff&size=64';
         if (profileAvatar) profileAvatar.src = avatarUrl;
         if (dropdownAvatar) dropdownAvatar.src = avatarUrl;
         if (mobileProfileAvatar) mobileProfileAvatar.src = avatarUrl;
         if (mobileMenuAvatar) mobileMenuAvatar.src = avatarUrl;
         
-        // === МЕНЮ ПУНКТЫ ===
         if (chatsItem) chatsItem.style.display = 'flex';
         if (messagesItem) messagesItem.style.display = 'flex';
         if (ordersItem) ordersItem.style.display = 'flex';
@@ -611,7 +596,6 @@ function updateUI() {
         const isAdmin = currentUser.username === 'notsynzxx';
         const isSupport = currentUser.username === 'risha';
         
-        // === АДМИН/ПОДДЕРЖКА ===
         if (isAdmin) {
             if (profilePrefix) { 
                 profilePrefix.textContent = adminModeEnabled ? '' : 'Administrator';
@@ -668,43 +652,22 @@ function updateUI() {
         if (mobileSellBtn) mobileSellBtn.style.display = 'flex';
         
     } else {
-        console.log('🔴 Пользователь НЕ авторизован, показываем кнопки входа');
-        
-        // === ДЕСКТОП ===
         if (authContainer) authContainer.style.display = 'flex';
         if (userProfile) userProfile.style.display = 'none';
         
-        // === МОБИЛЬНЫЙ ===
-        if (mobileAuthContainer) {
-            mobileAuthContainer.style.display = 'flex';
-            console.log('✅ mobileAuthContainer показан');
-        }
-        if (mobileProfile) {
-            mobileProfile.style.display = 'none';
-            console.log('✅ mobileProfile скрыт');
-        }
+        if (mobileAuthContainer) mobileAuthContainer.style.display = 'flex';
+        if (mobileProfile) mobileProfile.style.display = 'none';
+        if (mobileLoginBtn) mobileLoginBtn.style.display = 'flex';
+        if (mobileRegisterBtn) mobileRegisterBtn.style.display = 'flex';
         
-        // ПОКАЗЫВАЕМ КНОПКИ ВХОДА/РЕГИСТРАЦИИ
-        if (mobileLoginBtn) {
-            mobileLoginBtn.style.display = 'flex';
-            console.log('✅ mobileLoginBtn показан');
-        }
-        if (mobileRegisterBtn) {
-            mobileRegisterBtn.style.display = 'flex';
-            console.log('✅ mobileRegisterBtn показан');
-        }
-        
-        // СКРЫВАЕМ КНОПКУ "ПРОДАТЬ"
         if (sellBtn) sellBtn.style.display = 'none';
         if (mobileSellBtn) mobileSellBtn.style.display = 'none';
         
-        // Скрываем админ-пункты
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
         if (chatsItem) chatsItem.style.display = 'none';
         if (messagesItem) messagesItem.style.display = 'none';
         if (ordersItem) ordersItem.style.display = 'none';
         
-        // Очищаем мобильную аватарку
         if (mobileProfileAvatar) {
             mobileProfileAvatar.src = '';
             mobileProfileAvatar.alt = 'avatar';
@@ -2576,12 +2539,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // === ОТПРАВКА ФОРМЫ ОБЪЯВЛЕНИЯ ===
+    // === ⭐⭐⭐ ОТПРАВКА ФОРМЫ (ИСПРАВЛЕНО) ⭐⭐⭐ ===
     const adForm = document.getElementById('adForm');
     if (adForm) {
         adForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            if (!currentUser) { showNotification(t('need_auth'), 'warning'); openModal('authModal'); return; }
+            
+            if (!currentUser) {
+                showNotification(t('need_auth'), 'warning');
+                openModal('authModal');
+                return;
+            }
+            
+            // Собираем данные
             const title = document.getElementById('adTitle')?.value.trim();
             const price = document.getElementById('adPrice')?.value.trim();
             const category = document.getElementById('adCategory')?.value;
@@ -2590,68 +2560,100 @@ document.addEventListener('DOMContentLoaded', function() {
             const city = document.getElementById('adCity')?.value.trim();
             const deliveryTime = document.getElementById('deliveryTime')?.value;
             
-            if (!title) { showNotification('Введите название товара!', 'warning'); return; }
-            if (!price && priceType !== 'negotiable') { showNotification('Введите цену товара!', 'warning'); return; }
-            if (!category) { showNotification(t('select_category_alert'), 'warning'); return; }
+            console.log('📝 Данные формы:', { title, price, category, description, phone, city, deliveryTime, priceType });
+            
+            // Проверки
+            if (!title) {
+                showNotification('Введите название товара!', 'warning');
+                return;
+            }
+            
+            if (!price && priceType !== 'negotiable') {
+                showNotification('Введите цену товара!', 'warning');
+                return;
+            }
+            
+            if (!category) {
+                showNotification('Выберите категорию!', 'warning');
+                return;
+            }
+            
+            if (category !== 'keys') {
+                if (!phone) {
+                    showNotification('Введите номер телефона!', 'warning');
+                    return;
+                }
+                const phoneClean = phone.replace(/\D/g, '');
+                if (!/^7\d{10}$/.test(phoneClean) && !/^8\d{10}$/.test(phoneClean)) {
+                    showNotification('Некорректный номер телефона!', 'warning');
+                    return;
+                }
+            }
+            
             if (category === 'keys') {
                 if (!deliveryTime || parseInt(deliveryTime) < 1 || parseInt(deliveryTime) > 1440) {
                     showNotification('Введите время доставки от 1 до 1440 минут!', 'warning');
                     return;
                 }
-            } else {
-                if (!phone) { showNotification('Введите номер телефона!', 'warning'); return; }
-                const phoneClean = phone.replace(/\D/g, '');
-                if (!/^7\d{10}$/.test(phoneClean) && !/^8\d{10}$/.test(phoneClean)) {
-                    showNotification(t('phone_format'), 'warning');
-                    return;
-                }
             }
             
+            // Блокируем кнопку
             const submitBtn = document.getElementById('publishBtn');
             const originalText = submitBtn?.textContent || 'Опубликовать';
-            if (submitBtn) { submitBtn.textContent = t('send_to_moderation'); submitBtn.disabled = true; }
+            if (submitBtn) {
+                submitBtn.textContent = 'Отправка...';
+                submitBtn.disabled = true;
+            }
+            
             try {
-                const formData = new FormData();
-                formData.append('title', title);
-                formData.append('price', priceType === 'negotiable' ? '0' : price);
-                formData.append('category', category);
-                formData.append('description', description);
-                if (phone) formData.append('phone', phone.replace(/\D/g, ''));
-                formData.append('city', city || '');
-                formData.append('priceType', priceType);
-                if (deliveryTime) formData.append('deliveryTime', deliveryTime);
-                const file = document.getElementById('adImage')?.files[0];
-                if (file) formData.append('image', file);
-                
+                // ⭐ ОТПРАВЛЯЕМ JSON (НЕ FORM DATA!)
                 const response = await fetch(`${API_URL}/ads`, {
                     method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + authToken },
-                    body: formData
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title,
+                        price,
+                        category,
+                        description,
+                        phone: phone || '',
+                        city: city || '',
+                        priceType,
+                        deliveryTime: deliveryTime || null
+                    })
                 });
+                
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Ошибка публикации');
-                showNotification(t('ad_sent'), 'success');
+                console.log('📥 Ответ сервера:', data);
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Ошибка публикации');
+                }
+                
+                showNotification('✅ Объявление отправлено на модерацию!', 'success');
                 closeModal('createModal');
                 adForm.reset();
-                document.getElementById('imagePreview').innerHTML = `<i class="fas fa-cloud-upload-alt"></i><span>Нажмите или перетащите фото</span>`;
-                document.getElementById('imagePreview').classList.remove('has-image');
-                document.getElementById('imagePreview').style.padding = '24px 16px';
-                document.getElementById('imagePreview').style.borderColor = 'rgba(255,255,255,0.08)';
-                toggleCategoryFields('');
-                priceType = 'fixed';
-                document.querySelectorAll('.price-type-btn').forEach(b => { b.classList.remove('active'); b.style.background = 'transparent'; b.style.color = 'rgba(255,255,255,0.5)'; });
-                document.getElementById('priceFixedBtn').classList.add('active');
-                document.getElementById('priceFixedBtn').style.background = 'rgba(99,102,241,0.15)';
-                document.getElementById('priceFixedBtn').style.color = '#60a5fa';
-                document.getElementById('adPrice').disabled = false;
-                document.getElementById('adPrice').style.opacity = '1';
-                document.getElementById('adPrice').placeholder = 'Введите цену';
-                document.getElementById('priceDisplay').textContent = '₽';
+                
+                // Сброс превью
+                const preview = document.getElementById('imagePreview');
+                if (preview) {
+                    preview.innerHTML = `<i class="fas fa-cloud-upload-alt"></i><span>Нажмите или перетащите фото</span>`;
+                    preview.classList.remove('has-image');
+                }
+                
+                // Обновляем список объявлений
                 await loadAds();
+                
             } catch (error) {
+                console.error('❌ Ошибка:', error);
                 showNotification('❌ ' + error.message, 'error');
             } finally {
-                if (submitBtn) { submitBtn.textContent = originalText; submitBtn.disabled = false; }
+                if (submitBtn) {
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }
             }
         });
     }

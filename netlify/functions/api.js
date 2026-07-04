@@ -1,145 +1,52 @@
 const express = require('express');
 const serverless = require('serverless-http');
 const cors = require('cors');
-const path = require('path');
-const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const JWT_SECRET = 'my-secret-key-2024';
+
+// ========================================
+// 🔗 ПОДКЛЮЧЕНИЕ К SUPABASE
+// ========================================
+const supabaseUrl = process.env.SUPABASE_URL || 'https://huwzbjowyrzxkbnkhqtc.supabase.co';
+const supabaseKey = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1d3piam93eXJ6eGtibmtocXRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE2NzY0NjgsImV4cCI6MjA2NzI1MjQ2OH0.SZPmGtRLxL-U8EqhDdSyiBQK4bORLW6iQzH_ru-ajkI';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ========================================
-// 🔧 ФИКС: ПРАВИЛЬНЫЙ ПУТЬ ДЛЯ NETLIFY
-// ========================================
-// На Netlify можно писать только в /tmp
-const DATA_DIR = '/tmp/data';
-
-// СОЗДАЁМ ПАПКУ С ПРОВЕРКОЙ
-try {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-        console.log('✅ Папка создана:', DATA_DIR);
-    }
-} catch (err) {
-    console.error('❌ Ошибка создания папки:', err);
-}
-
-// ========================================
-// ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
-// ========================================
-function loadData(filename) {
-    const filePath = path.join(DATA_DIR, filename);
-    try {
-        if (fs.existsSync(filePath)) {
-            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        }
-    } catch (e) {
-        console.error('Ошибка загрузки:', filename, e);
-    }
-    return null;
-}
-
-function saveData(filename, data) {
-    const filePath = path.join(DATA_DIR, filename);
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    } catch (e) {
-        console.error('Ошибка сохранения:', filename, e);
-    }
-}
-
-// ========================================
-// ЗАГРУЗКА ДАННЫХ (С ПЕРВОНАЧАЛЬНЫМИ ЗНАЧЕНИЯМИ)
-// ========================================
-let users = loadData('users.json') || [];
-let ads = loadData('ads.json') || [];
-let complaints = loadData('complaints.json') || [];
-let messages = loadData('messages.json') || [];
-let pendingAds = loadData('pendingAds.json') || [];
-let orders = loadData('orders.json') || [];
-let chats = loadData('chats.json') || [];
-let reviews = loadData('reviews.json') || [];
-
-let nextAdId = loadData('counters.json')?.nextAdId || 1;
-let nextMessageId = loadData('counters.json')?.nextMessageId || 1;
-let nextOrderId = loadData('counters.json')?.nextOrderId || 1;
-let nextChatId = loadData('counters.json')?.nextChatId || 1;
-let nextUserId = loadData('counters.json')?.nextUserId || 1;
-let nextReviewId = loadData('counters.json')?.nextReviewId || 1;
-
-function saveAllData() {
-    saveData('users.json', users);
-    saveData('ads.json', ads);
-    saveData('complaints.json', complaints);
-    saveData('messages.json', messages);
-    saveData('pendingAds.json', pendingAds);
-    saveData('orders.json', orders);
-    saveData('chats.json', chats);
-    saveData('reviews.json', reviews);
-    saveData('counters.json', {
-        nextAdId, nextMessageId, nextOrderId, nextChatId, nextUserId, nextReviewId
-    });
-}
-
-// ========================================
-// ТЕСТОВЫЕ ПОЛЬЗОВАТЕЛИ
-// ========================================
-async function createTestUsers() {
-    if (users.length === 0) {
-        const testUsers = [
-            { username: 'notsynzxx', password: 'toto2023555', name: 'ns', is_admin: 1, prefix: 'Administrator', balance: 1000 },
-            { username: 'risha', password: 'risha2804account', name: 'mln', is_admin: 1, prefix: 'Support', balance: 500 }
-        ];
-        for (const u of testUsers) {
-            const hashedPassword = await bcrypt.hash(u.password, 10);
-            users.push({
-                id: nextUserId++,
-                username: u.username,
-                password: hashedPassword,
-                name: u.name,
-                is_admin: u.is_admin,
-                prefix: u.prefix,
-                avatar: null,
-                warnings: 0,
-                balance: u.balance || 0
-            });
-        }
-        saveAllData();
-        console.log('✅ Тестовые пользователи созданы');
-    }
-}
-
-// ========================================
 // АУТЕНТИФИКАЦИЯ
 // ========================================
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) {
         return res.status(401).json({ error: 'Требуется авторизация' });
     }
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            return res.status(403).json({ error: 'Недействительный токен' });
-        }
+    try {
+        const user = jwt.verify(token, JWT_SECRET);
         req.user = user;
-        const fullUser = users.find(u => u.id === user.id);
-        req.userData = fullUser;
+        const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+        req.userData = userData;
         next();
-    });
+    } catch (err) {
+        return res.status(403).json({ error: 'Недействительный токен' });
+    }
 }
 
-function isAdmin(req, res, next) {
-    const user = users.find(u => u.id === req.user.id);
-    if (!user || !user.is_admin) {
+async function isAdmin(req, res, next) {
+    if (!req.userData || !req.userData.is_admin) {
         return res.status(403).json({ error: 'Доступ запрещён' });
     }
-    req.userData = user;
     next();
 }
 
@@ -150,6 +57,7 @@ function isAdmin(req, res, next) {
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password, password2, name, email } = req.body;
+        
         if (!username || !password || !password2) {
             return res.status(400).json({ error: 'Заполните все поля!' });
         }
@@ -159,25 +67,34 @@ app.post('/api/register', async (req, res) => {
         if (password.length < 4) {
             return res.status(400).json({ error: 'Пароль минимум 4 символа!' });
         }
-        if (users.find(u => u.username === username)) {
+
+        const { data: existing } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (existing) {
             return res.status(400).json({ error: 'Пользователь уже существует!' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = {
-            id: nextUserId++,
-            username,
-            password: hashedPassword,
-            name: name || username,
-            email: email || '',
-            is_admin: 0,
-            prefix: null,
-            avatar: null,
-            warnings: 0,
-            balance: 0
-        };
-        users.push(newUser);
-        saveAllData();
+        
+        const { data: newUser, error } = await supabase
+            .from('users')
+            .insert({
+                username,
+                password: hashedPassword,
+                name: name || username,
+                email: email || '',
+                is_admin: 0,
+                balance: 0,
+                warnings: 0
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
 
         const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWT_SECRET, { expiresIn: '30d' });
         res.status(201).json({
@@ -185,7 +102,7 @@ app.post('/api/register', async (req, res) => {
             user: { ...newUser, password: undefined }
         });
     } catch (error) {
-        console.error('Ошибка регистрации:', error);
+        console.error('❌ Ошибка регистрации:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -193,12 +110,18 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        
         if (!username || !password) {
             return res.status(400).json({ error: 'Введите логин и пароль!' });
         }
 
-        const user = users.find(u => u.username === username);
-        if (!user) {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('username', username)
+            .single();
+
+        if (error || !user) {
             return res.status(400).json({ error: 'Неверный логин или пароль!' });
         }
 
@@ -213,50 +136,74 @@ app.post('/api/login', async (req, res) => {
             user: { ...user, password: undefined }
         });
     } catch (error) {
-        console.error('Ошибка входа:', error);
+        console.error('❌ Ошибка входа:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
 
-app.get('/api/me', authenticateToken, (req, res) => {
-    const user = users.find(u => u.id === req.user.id);
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+app.get('/api/me', authenticateToken, async (req, res) => {
+    const { data: user } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', req.user.id)
+        .single();
     res.json({ ...user, password: undefined });
 });
 
 // ========================================
-// API - ОБЪЯВЛЕНИЯ
+// API - ОБЪЯВЛЕНИЯ (ИСПРАВЛЕНО)
 // ========================================
 
-app.get('/api/ads', (req, res) => {
-    const approved = ads.filter(a => a.status === 'approved');
-    res.json(approved);
+app.get('/api/ads', async (req, res) => {
+    const { data: ads } = await supabase
+        .from('ads')
+        .select('*')
+        .eq('status', 'approved')
+        .order('date', { ascending: false });
+    res.json(ads || []);
 });
 
-app.get('/api/ads/:id', (req, res) => {
+app.get('/api/ads/:id', async (req, res) => {
     const id = parseInt(req.params.id);
-    const ad = ads.find(a => a.id === id);
+    const { data: ad } = await supabase
+        .from('ads')
+        .select('*')
+        .eq('id', id)
+        .eq('status', 'approved')
+        .single();
+    
     if (!ad) return res.status(404).json({ error: 'Не найдено' });
-    if (ad.status !== 'approved') return res.status(403).json({ error: 'Объявление на модерации' });
-    ad.views = (ad.views || 0) + 1;
-    saveAllData();
+    
+    await supabase
+        .from('ads')
+        .update({ views: (ad.views || 0) + 1 })
+        .eq('id', id);
+    
     res.json(ad);
 });
 
-app.post('/api/ads', authenticateToken, (req, res) => {
+app.post('/api/ads', authenticateToken, async (req, res) => {
     try {
+        console.log('📝 Создание объявления');
+        console.log('📝 Тело запроса:', req.body);
+        console.log('📝 Пользователь:', req.user.id);
+        
         const { title, description, price, city, country, phone, category, priceType, deliveryTime } = req.body;
         
+        // ⭐ ПРОВЕРКА ОБЯЗАТЕЛЬНЫХ ПОЛЕЙ
         if (!title || !title.trim()) {
             return res.status(400).json({ error: 'Введите название товара!' });
         }
+        
         if (!price || isNaN(parseFloat(price))) {
             return res.status(400).json({ error: 'Введите цену товара!' });
         }
+        
         if (!category || !category.trim()) {
             return res.status(400).json({ error: 'Выберите категорию!' });
         }
         
+        // Проверка телефона (не для ключей)
         if (category !== 'keys') {
             if (!phone || !phone.trim()) {
                 return res.status(400).json({ error: 'Введите номер телефона!' });
@@ -267,12 +214,14 @@ app.post('/api/ads', authenticateToken, (req, res) => {
             }
         }
         
+        // Проверка доставки (для ключей)
         if (category === 'keys') {
             if (!deliveryTime || parseInt(deliveryTime) < 1 || parseInt(deliveryTime) > 1440) {
                 return res.status(400).json({ error: 'Введите время доставки!' });
             }
         }
         
+        // Формируем цену
         let displayPrice = Number(price).toLocaleString() + ' ₽';
         if (priceType === 'hour') {
             displayPrice = Number(price).toLocaleString() + ' ₽/час';
@@ -280,33 +229,44 @@ app.post('/api/ads', authenticateToken, (req, res) => {
             displayPrice = 'Договорная';
         }
         
-        const user = users.find(u => u.id === req.user.id);
+        // Получаем пользователя
+        const { data: user } = await supabase
+            .from('users')
+            .select('name')
+            .eq('id', req.user.id)
+            .single();
+        
         if (!user) {
             return res.status(404).json({ error: 'Пользователь не найден' });
         }
         
-        const newAd = {
-            id: nextAdId++,
-            title: title.trim(),
-            description: (description || '').trim(),
-            price: parseFloat(price),
-            displayPrice,
-            priceType: priceType || 'fixed',
-            city: (city || 'Не указан').trim(),
-            country: (country || 'Россия').trim(),
-            phone: phone || '',
-            category,
-            date: new Date().toISOString(),
-            views: 0,
-            image: null,
-            user_id: req.user.id,
-            user_name: user.name || 'Пользователь',
-            status: 'pending',
-            delivery_time: deliveryTime || null
-        };
+        // ⭐ СОЗДАЁМ ОБЪЯВЛЕНИЕ В БАЗЕ
+        const { data: newAd, error } = await supabase
+            .from('ads')
+            .insert({
+                title: title.trim(),
+                description: (description || '').trim(),
+                price: parseFloat(price),
+                display_price: displayPrice,
+                price_type: priceType || 'fixed',
+                city: (city || 'Не указан').trim(),
+                country: (country || 'Россия').trim(),
+                phone: phone || '',
+                category: category,
+                user_id: req.user.id,
+                user_name: user.name || 'Пользователь',
+                status: 'pending',
+                delivery_time: deliveryTime || null
+            })
+            .select()
+            .single();
         
-        pendingAds.push(newAd);
-        saveAllData();
+        if (error) {
+            console.error('❌ Ошибка Supabase:', error);
+            return res.status(500).json({ error: 'Ошибка базы данных' });
+        }
+        
+        console.log('✅ Объявление создано:', newAd.id);
         
         res.status(201).json({ 
             success: true, 
@@ -314,7 +274,7 @@ app.post('/api/ads', authenticateToken, (req, res) => {
             ad: newAd 
         });
     } catch (error) {
-        console.error('Ошибка создания объявления:', error);
+        console.error('❌ Ошибка создания объявления:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -323,47 +283,55 @@ app.post('/api/ads', authenticateToken, (req, res) => {
 // API - МОДЕРАЦИЯ
 // ========================================
 
-app.get('/api/pending-ads', authenticateToken, isAdmin, (req, res) => {
-    res.json(pendingAds);
+app.get('/api/pending-ads', authenticateToken, isAdmin, async (req, res) => {
+    const { data: pending } = await supabase
+        .from('ads')
+        .select('*')
+        .eq('status', 'pending')
+        .order('date', { ascending: false });
+    res.json(pending || []);
 });
 
-app.post('/api/approve-ad/:id', authenticateToken, isAdmin, (req, res) => {
+app.post('/api/approve-ad/:id', authenticateToken, isAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
-    const index = pendingAds.findIndex(a => a.id === id);
-    if (index === -1) {
-        return res.status(404).json({ error: 'Объявление не найдено' });
-    }
-    const ad = pendingAds[index];
-    ad.status = 'approved';
-    ads.push(ad);
-    pendingAds.splice(index, 1);
-    saveAllData();
+    await supabase
+        .from('ads')
+        .update({ status: 'approved' })
+        .eq('id', id);
     res.json({ success: true });
 });
 
-app.post('/api/reject-ad/:id', authenticateToken, isAdmin, (req, res) => {
+app.post('/api/reject-ad/:id', authenticateToken, isAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
     const { reason } = req.body;
-    const index = pendingAds.findIndex(a => a.id === id);
-    if (index === -1) {
-        return res.status(404).json({ error: 'Объявление не найдено' });
+    const { data: ad } = await supabase
+        .from('ads')
+        .select('user_id, title')
+        .eq('id', id)
+        .single();
+    
+    if (ad) {
+        await supabase
+            .from('system_messages')
+            .insert({
+                user_id: ad.user_id,
+                from_admin: true,
+                title: '❌ Объявление отклонено',
+                content: `Ваше объявление "${ad.title}" было отклонено.\n\nПричина: ${reason || 'Не указана'}`,
+                type: 'rejection'
+            });
+        
+        await supabase
+            .from('users')
+            .update({ warnings: supabase.raw('warnings + 1') })
+            .eq('id', ad.user_id);
     }
-    const ad = pendingAds[index];
-    const user = users.find(u => u.id === ad.user_id);
-    if (user) {
-        messages.push({
-            id: nextMessageId++,
-            user_id: user.id,
-            from_admin: true,
-            title: '❌ Объявление отклонено',
-            content: `Ваше объявление "${ad.title}" было отклонено.\n\nПричина: ${reason || 'Не указана'}`,
-            created_at: new Date().toISOString(),
-            read: false
-        });
-        user.warnings = (user.warnings || 0) + 1;
-    }
-    pendingAds.splice(index, 1);
-    saveAllData();
+    
+    await supabase
+        .from('ads')
+        .delete()
+        .eq('id', id);
+    
     res.json({ success: true });
 });
 
@@ -371,89 +339,162 @@ app.post('/api/reject-ad/:id', authenticateToken, isAdmin, (req, res) => {
 // API - ЗАКАЗЫ
 // ========================================
 
-app.post('/api/buy/:adId', authenticateToken, (req, res) => {
-    const adId = parseInt(req.params.adId);
-    const ad = ads.find(a => a.id === adId);
-    if (!ad) return res.status(404).json({ error: 'Товар не найден' });
-    if (ad.status === 'closed') return res.status(400).json({ error: 'Товар уже продан' });
-    if (ad.user_id === req.user.id) return res.status(400).json({ error: 'Нельзя купить свой товар' });
+app.post('/api/buy/:adId', authenticateToken, async (req, res) => {
+    try {
+        const adId = parseInt(req.params.adId);
+        const { data: ad } = await supabase
+            .from('ads')
+            .select('*')
+            .eq('id', adId)
+            .eq('status', 'approved')
+            .single();
+        
+        if (!ad) return res.status(404).json({ error: 'Товар не найден' });
+        if (ad.user_id === req.user.id) {
+            return res.status(400).json({ error: 'Нельзя купить свой товар' });
+        }
+        
+        const { data: order, error } = await supabase
+            .from('orders')
+            .insert({
+                ad_id: ad.id,
+                ad_title: ad.title,
+                ad_price: ad.price,
+                ad_image: ad.image,
+                buyer_id: req.user.id,
+                seller_id: ad.user_id,
+                status: 'pending',
+                email: req.body.email || null
+            })
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        await supabase
+            .from('ads')
+            .update({ status: 'closed' })
+            .eq('id', adId);
+        
+        res.json({ success: true, order });
+    } catch (error) {
+        console.error('❌ Ошибка покупки:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/orders/:orderId/confirm', authenticateToken, async (req, res) => {
+    const orderId = parseInt(req.params.orderId);
+    const { data: order } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
     
-    const order = {
-        id: nextOrderId++,
-        ad_id: ad.id,
-        ad_title: ad.title,
-        ad_price: ad.price,
-        ad_image: ad.image,
-        buyer_id: req.user.id,
-        seller_id: ad.user_id,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        completed_at: null,
-        payment_confirmed: false,
-        email: req.body.email || null
-    };
-    orders.push(order);
-    ad.status = 'closed';
-    saveAllData();
-    res.json({ success: true, order });
-});
-
-app.post('/api/orders/:orderId/confirm', authenticateToken, (req, res) => {
-    const orderId = parseInt(req.params.orderId);
-    const order = orders.find(o => o.id === orderId);
     if (!order) return res.status(404).json({ error: 'Заказ не найден' });
-    if (order.seller_id !== req.user.id) return res.status(403).json({ error: 'Только продавец может подтвердить' });
-    if (order.status !== 'buyer_sent') return res.status(400).json({ error: 'Нельзя подтвердить' });
-    order.status = 'confirmed';
-    saveAllData();
-    res.json({ success: true, order });
+    if (order.seller_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только продавец может подтвердить' });
+    }
+    if (order.status !== 'buyer_sent') {
+        return res.status(400).json({ error: 'Нельзя подтвердить' });
+    }
+    
+    await supabase
+        .from('orders')
+        .update({ 
+            status: 'confirmed',
+            completed_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+    
+    res.json({ success: true });
 });
 
-app.post('/api/orders/:orderId/buyer-sent', authenticateToken, (req, res) => {
+app.post('/api/orders/:orderId/buyer-sent', authenticateToken, async (req, res) => {
     const orderId = parseInt(req.params.orderId);
-    const order = orders.find(o => o.id === orderId);
+    const { data: order } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+    
     if (!order) return res.status(404).json({ error: 'Заказ не найден' });
-    if (order.buyer_id !== req.user.id) return res.status(403).json({ error: 'Только покупатель может отметить отправку' });
-    if (order.status !== 'pending') return res.status(400).json({ error: 'Заказ уже обработан' });
-    order.status = 'buyer_sent';
-    saveAllData();
-    res.json({ success: true, order });
+    if (order.buyer_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только покупатель может отметить отправку' });
+    }
+    if (order.status !== 'pending') {
+        return res.status(400).json({ error: 'Заказ уже обработан' });
+    }
+    
+    await supabase
+        .from('orders')
+        .update({ status: 'buyer_sent' })
+        .eq('id', orderId);
+    
+    res.json({ success: true });
 });
 
-app.post('/api/orders/:orderId/cancel', authenticateToken, (req, res) => {
+app.post('/api/orders/:orderId/cancel', authenticateToken, async (req, res) => {
     const orderId = parseInt(req.params.orderId);
-    const order = orders.find(o => o.id === orderId);
+    const { data: order } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+    
     if (!order) return res.status(404).json({ error: 'Заказ не найден' });
-    if (order.buyer_id !== req.user.id) return res.status(403).json({ error: 'Только покупатель может отменить' });
-    if (order.status !== 'pending') return res.status(400).json({ error: 'Нельзя отменить обработанный заказ' });
-    order.status = 'cancelled';
-    const ad = ads.find(a => a.id === order.ad_id);
-    if (ad) ad.status = 'approved';
-    saveAllData();
-    res.json({ success: true, order });
+    if (order.buyer_id !== req.user.id) {
+        return res.status(403).json({ error: 'Только покупатель может отменить' });
+    }
+    if (order.status !== 'pending') {
+        return res.status(400).json({ error: 'Нельзя отменить обработанный заказ' });
+    }
+    
+    await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId);
+    
+    await supabase
+        .from('ads')
+        .update({ status: 'approved' })
+        .eq('id', order.ad_id);
+    
+    res.json({ success: true });
 });
 
-app.get('/api/orders', authenticateToken, (req, res) => {
-    const userOrders = orders.filter(o => o.buyer_id === req.user.id || o.seller_id === req.user.id);
-    res.json(userOrders);
+app.get('/api/orders', authenticateToken, async (req, res) => {
+    const { data: orders } = await supabase
+        .from('orders')
+        .select('*')
+        .or(`buyer_id.eq.${req.user.id},seller_id.eq.${req.user.id}`)
+        .order('created_at', { ascending: false });
+    res.json(orders || []);
 });
 
 // ========================================
 // API - ОТЗЫВЫ
 // ========================================
 
-app.get('/api/reviews/user/:userId', (req, res) => {
+app.get('/api/reviews/user/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    const userReviews = reviews.filter(r => r.seller_id === userId);
-    const average = userReviews.length ? (userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length) : 0;
+    const { data: reviews } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('seller_id', userId);
+    
+    const average = reviews && reviews.length
+        ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length)
+        : 0;
+    
     res.json({
-        reviews: userReviews,
+        reviews: reviews || [],
         average: Math.round(average * 10) / 10,
-        count: userReviews.length
+        count: reviews?.length || 0
     });
 });
 
-app.post('/api/reviews', authenticateToken, (req, res) => {
+app.post('/api/reviews', authenticateToken, async (req, res) => {
     try {
         const { ad_id, seller_id, rating, comment } = req.body;
         const buyer_id = req.user.id;
@@ -465,31 +506,52 @@ app.post('/api/reviews', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'Оценка должна быть от 1 до 5' });
         }
 
-        const order = orders.find(o => o.ad_id === ad_id && o.buyer_id === buyer_id && o.status === 'confirmed');
+        const { data: order } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('ad_id', ad_id)
+            .eq('buyer_id', buyer_id)
+            .eq('status', 'confirmed')
+            .single();
+
         if (!order) {
             return res.status(403).json({ error: 'Вы можете оставить отзыв только после подтверждённой покупки' });
         }
 
-        const existing = reviews.find(r => r.ad_id === ad_id && r.buyer_id === buyer_id);
+        const { data: existing } = await supabase
+            .from('reviews')
+            .select('id')
+            .eq('ad_id', ad_id)
+            .eq('buyer_id', buyer_id)
+            .single();
+
         if (existing) {
             return res.status(400).json({ error: 'Вы уже оставили отзыв' });
         }
 
-        const newReview = {
-            id: nextReviewId++,
-            ad_id,
-            ad_title: ads.find(a => a.id === ad_id)?.title || 'Товар',
-            buyer_id,
-            seller_id,
-            rating: parseInt(rating),
-            comment: comment || '',
-            created_at: new Date().toISOString()
-        };
-        reviews.push(newReview);
-        saveAllData();
+        const { data: ad } = await supabase
+            .from('ads')
+            .select('title')
+            .eq('id', ad_id)
+            .single();
+
+        const { data: newReview, error } = await supabase
+            .from('reviews')
+            .insert({
+                ad_id,
+                ad_title: ad?.title || 'Товар',
+                buyer_id,
+                seller_id,
+                rating: parseInt(rating),
+                comment: comment || ''
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
         res.status(201).json({ success: true, review: newReview });
     } catch (error) {
-        console.error('Ошибка создания отзыва:', error);
+        console.error('❌ Ошибка создания отзыва:', error);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
@@ -498,103 +560,116 @@ app.post('/api/reviews', authenticateToken, (req, res) => {
 // API - ЖАЛОБЫ
 // ========================================
 
-app.post('/api/complaints', authenticateToken, (req, res) => {
-    const { ad_id, reason, comment } = req.body;
-    if (!ad_id || !reason) return res.status(400).json({ error: 'Укажите объявление и причину' });
-    complaints.push({
-        id: complaints.length + 1,
-        ad_id,
-        reason,
-        comment: comment || '',
-        status: 'pending',
-        created_at: new Date().toISOString()
-    });
-    saveAllData();
-    res.json({ success: true, message: 'Жалоба отправлена' });
+app.post('/api/complaints', authenticateToken, async (req, res) => {
+    try {
+        const { ad_id, reason, comment } = req.body;
+        if (!ad_id || !reason) {
+            return res.status(400).json({ error: 'Укажите объявление и причину' });
+        }
+        
+        const { data: complaint, error } = await supabase
+            .from('complaints')
+            .insert({ ad_id, reason, comment: comment || '' })
+            .select()
+            .single();
+        
+        if (error) throw error;
+        res.json({ success: true, message: 'Жалоба отправлена' });
+    } catch (error) {
+        console.error('❌ Ошибка отправки жалобы:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
 });
 
-app.get('/api/complaints', authenticateToken, isAdmin, (req, res) => {
-    const result = complaints.filter(c => c.status === 'pending').map(c => {
-        const ad = ads.find(a => a.id === c.ad_id);
-        const user = users.find(u => u.id === ad?.user_id);
-        return {
-            ...c,
-            ad_title: ad?.title || 'Удалено',
-            ad_price: ad?.displayPrice || ad?.price || 0,
-            ad_image: ad?.image || null,
-            user_name: user?.name || 'Неизвестно'
-        };
-    });
-    res.json(result);
+app.get('/api/complaints', authenticateToken, isAdmin, async (req, res) => {
+    const { data: complaints } = await supabase
+        .from('complaints')
+        .select(`
+            *,
+            ads:ad_id (title, display_price, image, user_id),
+            users:ads.user_id (name)
+        `)
+        .eq('status', 'pending');
+    res.json(complaints || []);
 });
 
 // ========================================
 // API - ЧАТЫ
 // ========================================
 
-app.get('/api/chats', authenticateToken, (req, res) => {
-    const userChats = chats.filter(c => c.participants.includes(req.user.id));
-    const result = userChats.map(c => {
-        const otherId = c.participants.find(p => p !== req.user.id);
-        const other = users.find(u => u.id === otherId);
-        const lastMsg = c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1] : null;
-        return {
-            id: c.id,
-            other: other ? { id: other.id, username: other.username, name: other.name, avatar: other.avatar } : null,
-            lastMessage: lastMsg ? lastMsg.content : null,
-            lastMessageTime: lastMsg ? lastMsg.created_at : null,
-            unread: c.messages ? c.messages.filter(m => !m.read && m.sender_id !== req.user.id).length : 0
-        };
-    });
-    res.json(result);
+app.get('/api/chats', authenticateToken, async (req, res) => {
+    const { data: chats } = await supabase
+        .from('chats')
+        .select('*');
+    
+    const result = (chats || [])
+        .filter(c => c.participants && c.participants.includes(req.user.id))
+        .map(c => {
+            const otherId = c.participants.find(p => p !== req.user.id);
+            return {
+                id: c.id,
+                other: { id: otherId },
+                lastMessage: null,
+                lastMessageTime: null,
+                unread: 0
+            };
+        });
+    
+    res.json(result || []);
 });
 
-app.get('/api/chats/:chatId/messages', authenticateToken, (req, res) => {
+app.get('/api/chats/:chatId/messages', authenticateToken, async (req, res) => {
     const chatId = parseInt(req.params.chatId);
-    const chat = chats.find(c => c.id === chatId);
-    if (!chat) return res.status(404).json({ error: 'Чат не найден' });
-    if (!chat.participants.includes(req.user.id)) return res.status(403).json({ error: 'Доступ запрещён' });
-    res.json(chat.messages || []);
+    const { data: messages } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+    res.json(messages || []);
 });
 
-app.post('/api/chats', authenticateToken, (req, res) => {
+app.post('/api/chats', authenticateToken, async (req, res) => {
     const { otherUserId } = req.body;
     if (!otherUserId) return res.status(400).json({ error: 'Укажите пользователя' });
     if (otherUserId === req.user.id) return res.status(400).json({ error: 'Нельзя создать чат с собой' });
     
-    let chat = chats.find(c => c.participants.includes(req.user.id) && c.participants.includes(otherUserId));
-    if (!chat) {
-        chat = {
-            id: nextChatId++,
-            participants: [req.user.id, otherUserId],
-            messages: [],
-            created_at: new Date().toISOString()
-        };
-        chats.push(chat);
-        saveAllData();
+    const { data: existing } = await supabase
+        .from('chats')
+        .select('*')
+        .contains('participants', [req.user.id])
+        .contains('participants', [otherUserId])
+        .single();
+    
+    if (existing) {
+        return res.json(existing);
     }
+    
+    const { data: chat, error } = await supabase
+        .from('chats')
+        .insert({ participants: [req.user.id, otherUserId] })
+        .select()
+        .single();
+    
+    if (error) throw error;
     res.json(chat);
 });
 
-app.post('/api/chats/:chatId/messages', authenticateToken, (req, res) => {
+app.post('/api/chats/:chatId/messages', authenticateToken, async (req, res) => {
     const chatId = parseInt(req.params.chatId);
     const { content } = req.body;
     if (!content) return res.status(400).json({ error: 'Введите сообщение' });
     
-    const chat = chats.find(c => c.id === chatId);
-    if (!chat) return res.status(404).json({ error: 'Чат не найден' });
-    if (!chat.participants.includes(req.user.id)) return res.status(403).json({ error: 'Доступ запрещён' });
+    const { data: message, error } = await supabase
+        .from('chat_messages')
+        .insert({
+            chat_id: chatId,
+            sender_id: req.user.id,
+            content
+        })
+        .select()
+        .single();
     
-    const message = {
-        id: nextMessageId++,
-        sender_id: req.user.id,
-        content,
-        created_at: new Date().toISOString(),
-        read: false
-    };
-    if (!chat.messages) chat.messages = [];
-    chat.messages.push(message);
-    saveAllData();
+    if (error) throw error;
     res.json(message);
 });
 
@@ -602,28 +677,38 @@ app.post('/api/chats/:chatId/messages', authenticateToken, (req, res) => {
 // API - СООБЩЕНИЯ
 // ========================================
 
-app.get('/api/messages', authenticateToken, (req, res) => {
-    const userMessages = messages.filter(m => m.user_id === req.user.id);
-    res.json(userMessages);
+app.get('/api/messages', authenticateToken, async (req, res) => {
+    const { data: messages } = await supabase
+        .from('system_messages')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .order('created_at', { ascending: false });
+    res.json(messages || []);
 });
 
-app.post('/api/messages', authenticateToken, (req, res) => {
+app.post('/api/messages', authenticateToken, async (req, res) => {
     const { content, to_user_id, title, type } = req.body;
     if (!content) return res.status(400).json({ error: 'Введите сообщение' });
     
-    const user = users.find(u => u.id === req.user.id);
-    const message = {
-        id: nextMessageId++,
-        user_id: to_user_id || req.user.id,
-        from_admin: user?.is_admin || false,
-        title: title || null,
-        content,
-        created_at: new Date().toISOString(),
-        type: type || 'system',
-        read: false
-    };
-    messages.push(message);
-    saveAllData();
+    const { data: user } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', req.user.id)
+        .single();
+    
+    const { data: message, error } = await supabase
+        .from('system_messages')
+        .insert({
+            user_id: to_user_id || req.user.id,
+            from_admin: user?.is_admin || false,
+            title: title || null,
+            content,
+            type: type || 'system'
+        })
+        .select()
+        .single();
+    
+    if (error) throw error;
     res.json({ success: true, message });
 });
 
@@ -631,65 +716,152 @@ app.post('/api/messages', authenticateToken, (req, res) => {
 // API - АДМИН
 // ========================================
 
-app.get('/api/admin/users', authenticateToken, isAdmin, (req, res) => {
-    const usersData = users.map(u => ({
-        id: u.id,
-        username: u.username,
-        name: u.name,
-        balance: u.balance || 0,
-        is_admin: u.is_admin || 0,
-        warnings: u.warnings || 0,
-        avatar: u.avatar || null
-    }));
-    res.json(usersData);
+app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
+    const { data: users } = await supabase
+        .from('users')
+        .select('id, username, name, balance, is_admin, warnings, avatar');
+    res.json(users || []);
 });
 
-app.delete('/api/admin/users/:id', authenticateToken, isAdmin, (req, res) => {
+app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
-    const index = users.findIndex(u => u.id === id);
-    if (index === -1) return res.status(404).json({ error: 'Пользователь не найден' });
-    users.splice(index, 1);
-    saveAllData();
+    await supabase.from('users').delete().eq('id', id);
     res.json({ success: true });
 });
 
-app.put('/api/admin/users/:id/toggle-admin', authenticateToken, isAdmin, (req, res) => {
+app.put('/api/admin/users/:id/toggle-admin', authenticateToken, isAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
-    const user = users.find(u => u.id === id);
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-    user.is_admin = user.is_admin ? 0 : 1;
-    saveAllData();
-    res.json({ success: true, is_admin: user.is_admin });
+    const { data: user } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', id)
+        .single();
+    
+    if (user) {
+        await supabase
+            .from('users')
+            .update({ is_admin: user.is_admin ? 0 : 1 })
+            .eq('id', id);
+    }
+    res.json({ success: true });
 });
 
-app.delete('/api/admin/ads/:id', authenticateToken, isAdmin, (req, res) => {
+app.delete('/api/admin/ads/:id', authenticateToken, isAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
-    ads = ads.filter(a => a.id !== id);
-    pendingAds = pendingAds.filter(a => a.id !== id);
-    saveAllData();
+    await supabase.from('ads').delete().eq('id', id);
     res.json({ success: true });
+});
+
+// ========================================
+// API - БАЛАНС
+// ========================================
+
+app.post('/api/admin/add-balance', authenticateToken, isAdmin, async (req, res) => {
+    const { username, amount } = req.body;
+    if (!username || !amount) {
+        return res.status(400).json({ error: 'Укажите пользователя и сумму' });
+    }
+    
+    const { data: user } = await supabase
+        .from('users')
+        .select('balance')
+        .eq('username', username)
+        .single();
+    
+    if (!user) {
+        return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    
+    const newBalance = (user.balance || 0) + parseInt(amount);
+    await supabase
+        .from('users')
+        .update({ balance: newBalance })
+        .eq('username', username);
+    
+    res.json({ success: true, balance: newBalance });
+});
+
+app.get('/api/users', authenticateToken, isAdmin, async (req, res) => {
+    const { data: users } = await supabase
+        .from('users')
+        .select('id, username, name, balance, is_admin');
+    res.json(users || []);
+});
+
+// ========================================
+// API - КАТЕГОРИИ
+// ========================================
+
+app.get('/api/categories', (req, res) => {
+    res.json([
+        { id: 'all', name: 'Все', icon: 'th-large' },
+        { id: 'electronics', name: 'Электроника', icon: 'laptop' },
+        { id: 'realty', name: 'Недвижимость', icon: 'building' },
+        { id: 'cars', name: 'Транспорт', icon: 'car' },
+        { id: 'clothes', name: 'Одежда', icon: 'tshirt' },
+        { id: 'services', name: 'Услуги', icon: 'wrench' },
+        { id: 'animals', name: 'Животные', icon: 'paw' },
+        { id: 'hobbies', name: 'Хобби', icon: 'gamepad' },
+        { id: 'keys', name: 'Ключи для игр', icon: 'key' }
+    ]);
+});
+
+// ========================================
+// API - ЗАГРУЗКА АВАТАРА (ОПЦИОНАЛЬНО)
+// ========================================
+
+app.post('/api/upload-avatar', authenticateToken, async (req, res) => {
+    try {
+        const { avatar } = req.body;
+        if (!avatar) {
+            return res.status(400).json({ error: 'Ссылка на аватар не указана' });
+        }
+        
+        await supabase
+            .from('users')
+            .update({ avatar })
+            .eq('id', req.user.id);
+        
+        res.json({ success: true, avatar });
+    } catch (error) {
+        console.error('❌ Ошибка загрузки аватара:', error);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
 });
 
 // ========================================
 // HEALTH
 // ========================================
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        data: {
-            users: users.length,
-            ads: ads.length,
-            pendingAds: pendingAds.length,
-            orders: orders.length,
-            chats: chats.length
-        }
-    });
+
+app.get('/api/health', async (req, res) => {
+    try {
+        const { data: users, count: usersCount } = await supabase
+            .from('users')
+            .select('id', { count: 'exact' });
+        
+        const { data: ads, count: adsCount } = await supabase
+            .from('ads')
+            .select('id', { count: 'exact' });
+        
+        res.json({ 
+            status: 'OK', 
+            timestamp: new Date().toISOString(),
+            database: 'connected',
+            data: {
+                users: usersCount || 0,
+                ads: adsCount || 0
+            }
+        });
+    } catch (error) {
+        res.json({ 
+            status: 'ERROR', 
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
 });
 
 // ========================================
 // ЗАПУСК
 // ========================================
-createTestUsers();
-
 module.exports.handler = serverless(app);
